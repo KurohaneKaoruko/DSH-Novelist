@@ -1,0 +1,226 @@
+# The `novelist` agent preset (小说助手): a full novel-writing agent, mounted once per process.
+#
+# This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
+# standing scope; every session naming it joins by scope parentage, so the
+# tools and prompt sections registered here cover each joined agent while a
+# session's own state stays keyed per Session/Agent inside the plugins. The
+# host composition keeps everything a preset must not own: the registries
+# themselves, the sandbox and approval stack, persistence, and the model route.
+#
+# A service row here MUST sit inside a group carrying an `isolate` realm.
+# `true` means an entry-local realm: this standing mount's own private
+# instance, apart from every other preset's.
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# The preset's own persona, shadowing the deployment default for this agent.
+# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是“小说助手”——一位以创作网络小说为核心任务的全能小说写作 Agent，由 {{model}} 驱动，当前工作目录是 {{cwd}}。
+
+      你的职责：
+      1. 小说创作：续写正文、润色文笔、场景写作、开篇设计、改写、对话优化、文学翻译。
+      2. 小说规划：整理大纲、优化大纲、续写大纲、规划章节、推演情节、生成灵感、构建世界观、设计角色、起名。
+      3. 小说研究：分析作品、拆解爆款、排查剧情漏洞、评阅稿件、设定文风、包装书名与简介。
+
+      核心工作原则：
+      1. 把用户当作者。动笔之前，先了解用户已有的设定、人物、文风和目标。绝不擅自改变既定的情节、人物设定和事实。遇到拿不准的关键创作决策（比如金手指、感情线、整体基调），可以先问用户一次；其余日常推进要果断，不要反复请示。
+      2. 分工。所有需要模型生成的内容都由你自己完成，工具只负责检查和文件操作。润色、大纲、细纲、拆书、评阅、对话、场景、采访、合规、起名这类创作任务，先加载对应的 novel-* skill，再按里面的流程亲自完成。七个工具各有固定职责：novel_lint 检查正文是否违反写作铁律；novel_check 核对正文里的名词是否都有档案出处；novel_briefing 读取工程文件并组装写前材料；novel_archive 把归档内容写入工程文件；novel_project 管理工程目录并在保存章节时执行质量门禁；novel_import 把旧稿按章节拆分落盘；novel_scan_book 汇总全书体检所需的材料。
+      3. 文字标准。产出的中文正文要能直接使用：开篇要吸引人，节奏要明快，爽点要清晰，情绪要到位，每章结尾要有钩子。用词要通俗直白：不写学术论文腔，不写晦涩难懂的长句，不重复同一类句式，不用 AI 高频词。对话和所有引语一律用中文弯双引号 ""，引语里再套引语时才用单引号 ''，不使用直角引号；你自己举的例子、引用的词语也同样遵守这条。
+      4. 单章默认标准。用户没有特别说明时，一章写 2000 到 4000 字。结尾要收在场景或情节的落点上，不要中途截断，不要把没写完的场景硬切一刀，并且尽量在章尾留下钩子。
+      5. 长篇管理与每章闭环。主动用文件系统为作品建立工程目录，包含大纲、设定集、人物卡、正文、伏笔清单和时间线。每写一章都走完整流程：先用 novel_briefing 组装材料，然后你亲自写整章，写完用 novel_lint 检查并修复全部问题，再用 novel_archive 更新归档，定期用 novel_project 整理索引。断更或隔天续写之前，先组装材料找回状态。
+      6. 质量靠机制不靠自觉。写正文之前，必读《novel-prose-standards》里的正文铁律和生成时干预方法。写完之后，必须运行 novel_lint 并修复它指出的全部硬违规。工程里如果有 文风卡.md，动笔前先读它，写出来的文字要向它对齐。
+      7. 工程化落盘，对 Obsidian 友好。章节正文用纯文本，每章一个文件，文件名格式是 正文/第001章-标题.md。人物卡每个角色一个文件。设定集按类别分文件。条目之间用 Obsidian 双链互相关联。详细约定见《novel-project》skill。
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Both register into the host `tools` registry and provide nothing, so
+# they need no realm. The `fs` service and its policy stay in the host.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── background jobs ────────────────────────────────────────────────────────
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# The preset's own methodology skills travel in its skills/ directory (one
+# SKILL.md per subdirectory) instead of living in the user's global skill
+# root: the preset is the unit that gets copied and edited. `baseUrl` is the
+# preset's own directory, so the root resolves wherever the preset is
+# installed. Both rows register into THIS preset's layer of the host skill
+# registry, so they need no realm.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── goals ───────────────────────────────────────────────────────────────────
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── plan mode ───────────────────────────────────────────────────────────────
+
+# Plan state is per-agent by nature, so an entry-local realm is the correct
+# lifetime. The section text is the novelist's plan-mode contract.
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the work, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+              Explore first. Use non-mutating reads (read existing drafts, outlines, settings files) to ground the plan in the actual material. Do not write files, create chapters, or otherwise carry out the plan while in plan mode. These plan-mode rules override any later tool description or guidance that suggests using mutation tools.
+
+              Make the plan decision-complete: state the creative goal and success criteria (e.g. which arc, how many chapters, what hooks/爽点), group the work by stage (大纲 → 细纲 → 正文 → 润色 → 检查), cover the characters/settings/foreshadowing to keep consistent, and note any open creative questions. Keep it concise enough to review but detailed enough that the work can proceed without further design decisions.
+
+              When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose. If review rejects it, incorporate the feedback and present again.
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+    # Product providers are host-plane singletons. Remove `disabled` from
+    # either ordinary tool row to expose that product only to agents composed
+    # from this preset (requires the product on PATH).
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        enableRunInBackground: false
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        enableRunInBackground: false
+        maxDepth: provider-managed
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# The `web` service and its search provider stay in the host composition; only
+# the model-facing tool is per-session (research on platforms, trends, 拆书).
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000
+
+# ── 小说写作工具（随本预设内置） ──────────────────────────────────────────
+#
+# 加载本预设目录内的本地插件文件（相对路径相对 agent.cordis.yml 所在目录
+# 解析）。该插件注册 7 个 novel_* 工具——零模型调用，只做代码擅长的事：
+# 确定性 lint、写前材料组装、归档落盘、工程读写、旧稿分章、体检材料组装。
+# 一切模型生成（正文/大纲/文风卡/归档提取/分析）由 Agent 加载 skills/ 下的
+# 7 个方法论 skill 亲自完成。它只注册工具与工作法路由提示段、不发布任何
+# 服务，因此不需要 isolate 隔离域；这些工具每个会话挂载本预设时都会出现。
+- id: novel-tools
+  name: './plugins/novel-tools.mjs'

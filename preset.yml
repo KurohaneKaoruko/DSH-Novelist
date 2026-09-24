@@ -1,0 +1,2 @@
+name: 小说助手
+description: 以写小说为核心的全能创作 Agent。架构铁律——一切模型生成由 Agent 本体完成（加载 7 个方法论 skill，含 AI 高频词分级词库）；7 个 novel_* 工具零模型调用，只做代码擅长的事：AI 味确定性检查（novel_lint）、名词一致性核对（novel_check，防凭空编造设定）、写前材料组装（novel_briefing，默认携带前 10 章结尾）、归档三件套落盘（novel_archive，格式校验拒收）、作品工程操作（novel_project，保存章节内置 lint 门禁）、旧稿分章导入（novel_import）、体检材料组装（novel_scan_book）。正文由 Agent 亲写（直出即净：细节种子/呼吸句/分场景 + lint 自检循环），设定衔接、文风一致与去 AI 味均有机制化保障，支持长篇项目的文件管理与长线推进。
