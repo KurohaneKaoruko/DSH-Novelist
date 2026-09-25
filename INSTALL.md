@@ -1,6 +1,6 @@
 # 安装指引
 
-本文件描述如何把 Novelist（小说助手）安装到 DeepSeek Harness。**无需安装任何动态插件**，也没有浏览器授权步骤。Agent 请按顺序执行；手动安装按同样步骤操作。
+本文件描述如何把 Novelist（小说助手）安装到 DeepSeek Harness。Agent 请按顺序执行；手动安装按同样步骤操作。
 
 ## 0. 环境确认
 
