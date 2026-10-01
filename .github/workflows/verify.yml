@@ -1,0 +1,26 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-preset:
+    name: 预设内核冒烟测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 安装钉版 dsh 内核
+        run: npm run kernel:install
+      - name: 批处理式 ACP 冒烟
+        run: npm run verify:kernel
+      - name: 交互式 ACP 冒烟
+        run: npm run verify:acp

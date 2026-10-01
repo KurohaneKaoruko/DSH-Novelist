@@ -17,7 +17,7 @@
 
 - 新建会话，在预设选择器中选择「**小说助手**」，确认：
   - 工具列表包含 `novel_lint` / `novel_check` / `novel_briefing` / `novel_archive` / `novel_project` / `novel_import` / `novel_scan_book`；
-  - 技能列表包含 7 个 `novel-*` skill；
+  - 技能列表包含 13 个 `novel-*` skill（7 个方法论 + 6 个 novel-style-* 风格，风格按作品归属加载）；
   - 系统提示包含「小说助手工作法」路由段。
 - 建议开书流程：初始化工程 → 写 1-2 章定稿 → 提取文风卡 → 每章「简报 → 成稿 → 归档」闭环。
 

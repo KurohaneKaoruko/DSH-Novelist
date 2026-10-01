@@ -4,7 +4,7 @@
 
 ## 包含内容
 
-**7 个 skill（方法论，按需加载）**
+**13 个 skill（按需加载）**
 
 | skill | 用途 |
 | --- | --- |
@@ -15,6 +15,17 @@
 | novel-craft | 场景三拍、对话技法、打脸四拍、情绪曲线、角色设计与采访 |
 | novel-analysis | 分析/拆书/评阅（六维评分）/模拟读者团/合规体检/起名 |
 | novel-project | 工程目录约定、人物卡/设定集/文风卡模板、归档三件套、Obsidian 工作流 |
+
+**6 个风格 skill（按作品风格加载，写什么风格就加载哪个）**
+
+| skill | 用途 |
+| --- | --- |
+| novel-style-hotblood | 男频热血爽文：爽点密度与升级链、期待感管理、打脸写法、金手指规则、节奏铁律 |
+| novel-style-romance | 女频甜宠言情：心动写法、糖点节奏、双视角与信息差、误会分寸、情话对话、日常质感 |
+| novel-style-mystery | 悬疑/诡秘/克苏鲁风：谜面先行、线索公平性、恐怖写法、规矩与代价、多层反转、张力控制 |
+| novel-style-xianxia | 古风仙侠/武侠：古风语感、体系自洽、打斗意境、江湖质感、山川风物、称谓礼制 |
+| novel-style-scifi | 科幻/末世：设定推演、细节颗粒度、末世压力、人性抉择、科学克制、冷静叙述腔 |
+| novel-style-lightnovel | 轻小说/二次元风：轻快语感、角色声线、萌点写法、梗的分寸、日常主线配比 |
 
 **1 个插件（7 个工具，纯代码实现，无模型调用）**
 
@@ -34,6 +45,19 @@
 
 - 预设安装位置：`~/.dsh/.agent-presets/novelist`
 - 卸载：删除该目录即可
+
+## 开发与验证
+
+改完人设 / 工具 / skill 后，可用 `tools/` 里的工具链以真实 dsh 内核冒烟验证预设仍可正常挂载与会话（不需要 API Key）：
+
+```bash
+cd tools
+npm run kernel:install    # 安装钉版 dsh 内核（@deepseek-ai/dsh@0.1.2-rc.1）
+npm run verify:kernel     # 批处理式 ACP 冒烟
+npm run verify:acp        # 交互式 ACP 冒烟
+```
+
+CI（`.github/workflows/verify.yml`）在 push 时自动跑同一套验证。`tools/` 是开发工具，不随预设安装。
 
 ## 许可证
 
