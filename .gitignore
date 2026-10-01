@@ -1,0 +1,21 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+*.iml
+
+# local research / scratch files never belong here
+*.log
+xingyue-*
+tance-*
+
+# ---- tools/（预设验证工具链的本地产物）----
+tools/kernel/node_modules/
+tools/kernel/package-lock.json
+tools/.npm-cache/
+tools/.testhome*/
+tools/.dl-*/
+tools/.node-extract/

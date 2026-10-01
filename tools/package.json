@@ -1,0 +1,11 @@
+{
+  "name": "novelist-verify-tools",
+  "private": true,
+  "description": "novelist 预设验证工具链：安装钉版 dsh 内核，用 ACP 协议冒烟验证「小说助手」预设可被真实内核加载运行（无依赖，纯 node 标准库）",
+  "type": "module",
+  "scripts": {
+    "kernel:install": "node kernel-install.mjs",
+    "verify:kernel": "node verify-kernel.mjs",
+    "verify:acp": "node verify-acp-live.mjs"
+  }
+}

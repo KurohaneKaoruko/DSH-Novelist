@@ -1,0 +1,8 @@
+{
+  "name": "novelist-verify-kernel",
+  "private": true,
+  "description": "验证用 dsh 内核安装位（版本钉住）。在 tools/ 下运行 node kernel-install.mjs 安装；node_modules 与 lockfile 不入库。",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.2-rc.1"
+  }
+}
