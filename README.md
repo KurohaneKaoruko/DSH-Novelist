@@ -35,10 +35,6 @@
 - 预设安装位置：`~/.dsh/.agent-presets/novelist`
 - 卸载：删除该目录即可
 
-## 姊妹项目
-
-[DSH-Novel-App](https://github.com/KurohaneKaoruko/DSH-Novel-App)——基于 DSH 的小说写作桌面端（Rust + Tauri），内置本预设与六种风格变体。
-
 ## 许可证
 
 [MIT License](LICENSE) © 2026 KurohaneKaoruko
