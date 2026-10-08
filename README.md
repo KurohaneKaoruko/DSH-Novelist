@@ -4,6 +4,8 @@
 
 ## 包含内容
 
+> 13 个 skill 的本体在独立仓库 [Novelist-Skills](https://github.com/KurohaneKaoruko/Novelist-Skills)（跨项目通用，不绑死本仓库），以 submodule 形式挂载于本仓库 `skills/` 目录。克隆本仓库请带 `--recurse-submodules`。
+
 **13 个 skill（按需加载）**
 
 | skill | 用途 |
@@ -43,6 +45,7 @@
 
 把本仓库交给任意 DeepSeek Harness Agent：「请按 INSTALL.md 把 Novelist 安装到当前环境」。手动安装见 [INSTALL.md](INSTALL.md)。
 
+- git 克隆请带子模块：`git clone --recurse-submodules <本仓库>`（已克隆的项目补拉：`git submodule update --init`）
 - 预设安装位置：`~/.dsh/.agent-presets/novelist`
 - 卸载：删除该目录即可
 
@@ -58,6 +61,8 @@ npm run verify:acp        # 交互式 ACP 冒烟
 ```
 
 CI（`.github/workflows/verify.yml`）在 push 时自动跑同一套验证。`tools/` 是开发工具，不随预设安装。
+
+更新 skills 子模块到上游最新：`git submodule update --remote skills`（改完记得提交 `skills` 指针）。
 
 ## 许可证
 

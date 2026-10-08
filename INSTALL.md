@@ -10,6 +10,7 @@
 ## 1. 安装 Agent 预设「小说助手」（持久）
 
 1. 把仓库根目录的全部内容（`preset.yml`、`agent.cordis.yml`、`plugins/`、`skills/`）复制到 `$HOME/.dsh/.agent-presets/novelist/`。
+   - 本仓库以 submodule 引用 `skills/`（独立仓库 Novelist-Skills）：git 克隆请带 `--recurse-submodules`，否则 `skills/` 为空目录。
    - 该目录在会话工作区之外：若文件写入被沙箱拒绝，用 sandbox_permissions 重试一次（需用户批准）。
 2. 挂载校验：通过临时插件注入 `agentPresets` 服务并调用 `agentPresets.standingKeyFor('novelist')`；正常返回即校验通过。
 
