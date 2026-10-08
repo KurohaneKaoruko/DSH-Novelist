@@ -10,6 +10,14 @@
 # A service row here MUST sit inside a group carrying an `isolate` realm.
 # `true` means an entry-local realm: this standing mount's own private
 # instance, apart from every other preset's.
+#
+# VERSION COMPAT (安装方式随 DSH 版本分流，实测分界线):
+#   - 本文件走「目录式」安装（复制到 $DSH_HOME/.agent-presets/novelist/），
+#     适用于所有仍读取该目录的版本，即 ≤ 0.1.6-alpha.2（0.1.7 起无人再读该目录）。
+#   - DSH ≥ 0.1.7 请改用 bundle 安装：见 package.json + cordis.patch.yml。
+#   - persona 行同时携带 `prefix`（0.1.3+ 的键）与 `text`（≤ 0.1.2-rc.1 的键）：
+#     实测两端 schema 各读自己的键、静默忽略另一个（双键均通过校验），
+#     因此用 YAML 锚点让两键共享同一份文案，一份文件吃下整个区间。
 
 # ── identity ────────────────────────────────────────────────────────────────
 
@@ -18,7 +26,9 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    # DSH ≥ 0.1.3: `prefix`（required）；≤ 0.1.2-rc.1: `text`（required）。
+    # 锚点 &novelist-persona 供下方 text: 兼容键复用同一份文案。
+    prefix: &novelist-persona >-
       你是“小说助手”——一位以创作网络小说为核心任务的全能小说写作 Agent，由 {{model}} 驱动，当前工作目录是 {{cwd}}。
 
       你的职责：
@@ -34,6 +44,8 @@
       5. 长篇管理与每章闭环。主动用文件系统为作品建立工程目录，包含大纲、设定集、人物卡、正文、伏笔清单和时间线。每写一章都走完整流程：先用 novel_briefing 组装材料，然后你亲自写整章，写完用 novel_lint 检查并修复全部问题，再用 novel_archive 更新归档，定期用 novel_project 整理索引。断更或隔天续写之前，先组装材料找回状态。
       6. 质量靠机制不靠自觉。写正文之前，必读《novel-prose-standards》里的正文铁律和生成时干预方法。写完之后，必须运行 novel_lint 并修复它指出的全部硬违规。工程里如果有 文风卡.md，动笔前先读它，写出来的文字要向它对齐。
       7. 工程化落盘，对 Obsidian 友好。章节正文用纯文本，每章一个文件，文件名格式是 正文/第001章-标题.md。人物卡每个角色一个文件。设定集按类别分文件。条目之间用 Obsidian 双链互相关联。详细约定见《novel-project》skill。
+    # ≤ 0.1.2-rc.1 兼容键：与 prefix 共享同一份文案（见上方锚点说明）。
+    text: *novelist-persona
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -182,10 +194,11 @@
         enableRunInBackground: false
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
-      config:
-        provider: spawn
+    # 0.1.2~0.1.5 曾用 `@deepseek-ai/dsh-workflow-worker-thread`（进程外引擎），
+    # 该包自 0.1.6 起从内核移除；`dsh-workflow`（in-process 引擎）在
+    # 0.1.2 → 0.2.x 全区间存在且提供同名 workflowEngine 服务，目录式全区间可挂。
+    - id: workflow-engine
+      name: '@deepseek-ai/dsh-workflow'
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'

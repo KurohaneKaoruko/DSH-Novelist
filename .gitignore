@@ -15,6 +15,7 @@ tance-*
 # ---- tools/（预设验证工具链的本地产物）----
 tools/kernel/node_modules/
 tools/kernel/package-lock.json
+tools/kernel-bundle/
 tools/.npm-cache/
 tools/.testhome*/
 tools/.dl-*/

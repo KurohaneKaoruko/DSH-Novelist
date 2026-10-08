@@ -45,19 +45,27 @@
 
 把本仓库交给任意 DeepSeek Harness Agent：「请按 INSTALL.md 把 Novelist 安装到当前环境」。手动安装见 [INSTALL.md](INSTALL.md)。
 
+安装方式随 DSH 版本分流（实测分界线）：
+
+| DSH 版本 | 安装方式 |
+| --- | --- |
+| ≥ 0.1.7（含 0.2.x） | **bundle 安装**（插件管理器 `install_bundle`，目标为本仓库目录）。此区间 `.agent-presets/` 目录式预设已不被读取 |
+| ≤ 0.1.6（目录式区间） | **目录复制**到 `~/.dsh/.agent-presets/novelist/` |
+
 - git 克隆请带子模块：`git clone --recurse-submodules <本仓库>`（已克隆的项目补拉：`git submodule update --init`）
-- 预设安装位置：`~/.dsh/.agent-presets/novelist`
-- 卸载：删除该目录即可
+- 卸载：≥ 0.1.7 在插件管理器移除 `dsh-novelist` bundle（并删除残留的 `~/.dsh/.agent-presets/novelist`）；≤ 0.1.6 删除该目录即可
 
 ## 开发与验证
 
-改完人设 / 工具 / skill 后，可用 `tools/` 里的工具链以真实 dsh 内核冒烟验证预设仍可正常挂载与会话（不需要 API Key）：
+改完人设 / 工具 / skill 后，可用 `tools/` 里的工具链以真实 dsh 内核冒烟验证两条安装路线（组合内探针插件直接盘问 roster / 挂载诊断 / scoped skills，不需要 API Key）：
 
 ```bash
 cd tools
-npm run kernel:install    # 安装钉版 dsh 内核（@deepseek-ai/dsh@0.1.2-rc.1）
-npm run verify:kernel     # 批处理式 ACP 冒烟
-npm run verify:acp        # 交互式 ACP 冒烟
+npm run kernel:install          # 目录式验证内核（@deepseek-ai/dsh@0.1.2-rc.1）
+npm run verify:kernel           # 目录式路线冒烟（0.1.2，硬断言：roster/挂载/skills）
+npm run kernel:install:bundle   # bundle 验证内核（@deepseek-ai/dsh@0.2.0-rc.2）
+npm run verify:bundle           # bundle 路线冒烟（≥ 0.1.7，硬断言同上）
+npm run verify:acp              # 交互式 ACP 冒烟（目录式）
 ```
 
 CI（`.github/workflows/verify.yml`）在 push 时自动跑同一套验证。`tools/` 是开发工具，不随预设安装。

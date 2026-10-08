@@ -25,7 +25,10 @@ const get = (flag, dflt) => {
 };
 const home = path.resolve(toolsDir, get("--home", ".testhome"));
 const nodeBin = get("--node", process.execPath);
-const kernelBin = path.join(toolsDir, "kernel", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+// 内核安装位（默认钉版 tools/kernel；可用 --kernel 指向其他版本安装位，如 0.1.6）。
+const kernelArg = get("--kernel", "kernel");
+const kernelDir = path.isAbsolute(kernelArg) ? kernelArg : path.join(toolsDir, kernelArg);
+const kernelBin = path.join(kernelDir, "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
 
 if (!fs.existsSync(kernelBin)) {
   console.error("[verify] 内核未安装，先运行：npm run kernel:install");
@@ -44,17 +47,28 @@ console.log("[verify] provision: " + JSON.stringify(counts));
 
 const child = spawn(nodeBin, [kernelBin, "--profile", "novel"], {
   cwd: home,
-  env: { ...process.env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: "1" },
+  env: {
+    ...process.env,
+    DSH_HOME: home,
+    DSH_TELEMETRY_DISABLED: "1",
+    DSH_PROBE_CWD: ws,
+  },
   stdio: ["pipe", "pipe", "pipe"],
 });
 
-// stdout/stderr 同步落盘（失败诊断用），行缓冲供应答匹配。
+// stdout/stderr 同步落盘（失败诊断用），行缓冲供应答匹配；stderr 另行收集探针行。
 const outFile = path.join(home, ".acp-out.jsonl");
 const errFile = path.join(home, ".acp-err.log");
 const outLog = fs.createWriteStream(outFile);
 const errChunks = [];
+const probeLines = [];
 child.stdout.on("data", (c) => outLog.write(c));
-child.stderr.on("data", (c) => errChunks.push(c));
+child.stderr.on("data", (c) => {
+  errChunks.push(c);
+  for (const line of c.toString("utf8").split("\n")) {
+    if (line.startsWith("[novelist-probe]")) probeLines.push(line.slice("[novelist-probe] ".length));
+  }
+});
 const errTail = () => Buffer.concat(errChunks).toString("utf8").slice(-3000);
 child.on("exit", (code) => {
   if (!finished) fail("内核提前退出（code=" + code + "）\nstderr:\n" + errTail());
@@ -86,6 +100,8 @@ function call(method, params, timeoutMs) {
   });
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // 内核 → 客户端请求（如 session/request_permission）一律拒绝，避免挂起。
 child.stdout.on("data", (chunk) => {
   for (const line of chunk.toString("utf8").split("\n")) {
@@ -116,6 +132,35 @@ try {
   const session = await call("session/new", { cwd: ws, mcpServers: {} }, 180000);
   console.log("[verify] session/new OK：" + (Date.now() - t) + "ms sessionId=" + session.sessionId);
   console.log("         configOptions: " + JSON.stringify(session.configOptions).slice(0, 600));
+
+  // 等组合内探针给出结论（roster / ensureStanding / skills 盘点）。
+  const verdictLine = () => probeLines.find((l) => l.startsWith("VERDICT"));
+  let waited = 0;
+  while (verdictLine() === undefined && waited < 90000) {
+    await sleep(500);
+    waited += 500;
+  }
+  console.log("── 探针输出 ──");
+  for (const line of probeLines) console.log("  " + line.slice(0, 1600));
+  const verdict = verdictLine();
+  if (verdict === undefined) fail("探针 90s 内未给出 VERDICT\nstderr:\n" + errTail());
+  if (!verdict.startsWith("VERDICT OK")) fail("探针判定失败：" + verdict + "\nstderr:\n" + errTail());
+  const rosterLine = probeLines.find((l) => l.startsWith("ROSTER "));
+  const roster = rosterLine ? JSON.parse(rosterLine.slice("ROSTER ".length)) : [];
+  const novelist = roster.find((r) => r.id === "novelist");
+  if (!novelist) fail("roster 无 novelist：" + rosterLine);
+  if (novelist.broken !== undefined) fail("novelist 带 broken：" + novelist.broken);
+  const skillsLine = probeLines.find((l) => l.startsWith("SKILLS "));
+  const skillNames = skillsLine ? JSON.parse(skillsLine.slice("SKILLS ".length)) : [];
+  const expectedSkills = [
+    "novel-ai-lexicon", "novel-analysis", "novel-continuity", "novel-craft", "novel-plotting",
+    "novel-project", "novel-prose-standards",
+    "novel-style-hotblood", "novel-style-lightnovel", "novel-style-mystery",
+    "novel-style-romance", "novel-style-scifi", "novel-style-xianxia",
+  ];
+  const missing = expectedSkills.filter((s) => !skillNames.includes(s));
+  if (missing.length > 0) fail("挂载后的 skills 缺少：" + missing.join(", ") + "（实际 " + skillNames.length + " 个）");
+  console.log("         探针判定：" + verdict + "；skills=" + skillNames.length + " 个 novel-* 全部发现");
 
   const list = await call("session/list", {}, 60000);
   console.log("[verify] session/list OK：sessions=" + (list.sessions ? list.sessions.length : "?"));

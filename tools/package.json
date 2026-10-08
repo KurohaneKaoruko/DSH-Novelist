@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "kernel:install": "node kernel-install.mjs",
+    "kernel:install:bundle": "node kernel-install.mjs --version 0.2.0-rc.2 --at kernel-bundle",
     "verify:kernel": "node verify-kernel.mjs",
+    "verify:bundle": "node verify-bundle.mjs",
     "verify:acp": "node verify-acp-live.mjs"
   }
 }

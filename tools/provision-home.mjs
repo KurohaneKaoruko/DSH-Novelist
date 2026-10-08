@@ -81,7 +81,7 @@ function writeStamp(dir, hash) {
 function profilePatchYml() {
   return [
     "# novelist 验证 profile：小说助手（由 tools/provision-home.mjs 生成，请勿手改）。",
-    "# 组合：dsh-base + dsh-acp-app（ACP stdio 服务）+ agent-presets roster。",
+    "# 组合：dsh-base + dsh-acp-app（ACP stdio 服务）+ agent-presets roster + 探针行。",
     "",
     "# 部署级兜底人设：预设挂载失败时仍是写作 Agent 语义（正常路径由预设 persona 接管）。",
     "- id: system-prompt",
@@ -96,12 +96,67 @@ function profilePatchYml() {
     "      config:",
     "        default: " + PRESET_KEY,
     "",
+    "# 探针行：inject agentPresets，激活即盘问 roster/mount/skills 并落 stderr",
+    "# （verify-kernel 据此做硬断言；相对路径行锚定在本 profile 目录）。",
+    "    - id: novelist-probe",
+    "      name: './novelist-probe.mjs'",
+    "",
   ].join("\n");
 }
+
+// 组合内探针插件：两代 roster API 通吃——
+//   ≤ 0.1.6 目录式：dsh-agent-presets（list/resolveMountable/ensureStanding/standingKeyFor）
+//   ≥ 0.1.7 声明式：dsh-agent-preset-registry（list/diagnostic/acquireScope）
+// 激活后把 roster、挂载诊断与 scoped skills 清单写到 stderr，供验证脚本断言。
+const probePluginSource = [
+  'export const name = "novelist-probe";',
+  'export const inject = ["agentPresets"];',
+  'export async function apply(ctx) {',
+  '  const out = (l) => process.stderr.write("[novelist-probe] " + l + "\\n");',
+  "  try {",
+  "    const presets = ctx.agentPresets;",
+  "    const list = await presets.list();",
+  '    const rows = (list ?? []).map((r) => ({ id: r.id, name: r.name, broken: r.broken }));',
+  '    out("ROSTER " + JSON.stringify(rows));',
+  '    const row = rows.find((r) => r.id === "novelist");',
+  '    if (!row) { out("VERDICT FAIL no-novelist-row"); return; }',
+  '    if (row.broken !== undefined) { out("VERDICT FAIL broken: " + row.broken); return; }',
+  "    let problem;",
+  "    if (presets.definitions) {",
+  "      const record = [...presets.definitions.values()].find((r) => r.config && r.config.id === \"novelist\");",
+  '      problem = record ? await presets.diagnostic(record) : "no record";',
+  "    } else if (presets.resolveMountable) {",
+  "      try {",
+  '        const preset = await presets.resolveMountable("novelist");',
+  "        await presets.ensureStanding(preset);",
+  "      } catch (e) { problem = String((e && e.message) || e); }",
+  "    }",
+  '    out("DIAGNOSTIC " + (problem === undefined ? "(healthy)" : problem));',
+  "    if (problem === undefined) {",
+  '      const skills = ctx.get("skills");',
+  '      if (skills === undefined) out("SKILLS absent");',
+  "      else {",
+  "        let scope;",
+  "        try {",
+  "          scope = presets.standingKeyFor ? await presets.standingKeyFor(\"novelist\")",
+  "            : presets.acquireScope ? (await presets.acquireScope(\"novelist\")).key : undefined;",
+  "        } catch {}",
+  "        const listed = await skills.list({ cwd: process.env.DSH_PROBE_CWD, scope });",
+  '        out("SKILLS " + JSON.stringify((listed ?? []).map((s) => s.name).sort()));',
+  "      }",
+  "    }",
+  '    out("VERDICT " + (problem === undefined ? "OK" : "BROKEN"));',
+  "  } catch (e) {",
+  '    out("VERDICT FAIL " + String((e && e.stack) || e).slice(0, 900));',
+  "  }",
+  "}",
+  "",
+].join("\n");
 
 function ensureProfile(home, log) {
   const dir = path.join(home, "profiles", "novel");
   fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "novelist-probe.mjs"), probePluginSource, "utf8");
   const pkg = {
     name: "dsh-profile-novel",
     private: true,

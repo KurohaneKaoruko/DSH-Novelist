@@ -1,0 +1,29 @@
+{
+  "name": "dsh-novelist",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness agent-preset bundle: 小说助手（novelist）— a full novel-writing agent preset for DSH ≥ 0.1.7.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KurohaneKaoruko/DSH-Novelist.git"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-preset"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "cordis.patch.yml",
+    "agent.cordis.yml",
+    "preset.yml",
+    "plugins",
+    "skills"
+  ]
+}

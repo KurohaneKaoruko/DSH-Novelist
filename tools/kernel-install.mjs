@@ -2,8 +2,10 @@
 // tools/kernel-install.mjs — 在 tools/kernel/ 内安装钉住版本的 DeepSeek Harness 内核。
 // （自 DSH-Novel 桌面端 scripts/kernel-install.mjs 迁移，改为服务 novelist 预设验证。）
 //
-// 用法：node kernel-install.mjs [--prod]
-// 产物：kernel/node_modules/@deepseek-ai/dsh/lib/bin.js（dsh CLI 入口，不入库）
+// 用法：node kernel-install.mjs [--prod] [--version <ver>] [--at <dir>]
+//   --version  覆盖 kernel/package.json 里钉住的版本（如 0.2.0-rc.2，用于 bundle 路线验证）。
+//   --at       安装目录名（相对 tools/ 或绝对路径），默认 kernel；不同版本互不覆盖。
+// 产物：<dir>/node_modules/@deepseek-ai/dsh/lib/bin.js（dsh CLI 入口，不入库）
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -11,8 +13,27 @@ import path from "node:path";
 import url from "node:url";
 
 const toolsDir = path.resolve(url.fileURLToPath(new URL(".", import.meta.url)));
-const kernelDir = path.join(toolsDir, "kernel");
+const argv = process.argv.slice(2);
+const get = (flag) => {
+  const i = argv.indexOf(flag);
+  return i >= 0 ? argv[i + 1] : null;
+};
+const version = get("--version");
+const atName = get("--at") || "kernel";
+const kernelDir = path.isAbsolute(atName) ? atName : path.join(toolsDir, atName);
 const binPath = path.join(kernelDir, "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+
+if (version) {
+  // 独立安装位：按指定版本生成 package.json（钉版目录 tools/kernel/ 不被改动）。
+  fs.mkdirSync(kernelDir, { recursive: true });
+  const pkg = {
+    name: "novelist-verify-kernel",
+    private: true,
+    description: "验证用 dsh 内核安装位（版本钉住）。在 tools/ 下运行 node kernel-install.mjs 安装；node_modules 与 lockfile 不入库。",
+    dependencies: { "@deepseek-ai/dsh": version },
+  };
+  fs.writeFileSync(path.join(kernelDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n", "utf8");
+}
 
 const args = ["install", "--no-audit", "--no-fund", "--cache", path.join(toolsDir, ".npm-cache")];
 // 受限沙箱（pipe/spawn 被禁）里生命周期脚本会 EPERM —— 显式选择跳过。
