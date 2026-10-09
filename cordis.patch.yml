@@ -22,7 +22,7 @@
         id: novelist
         name: 小说助手
         description: >-
-          以写小说为核心的全能创作 Agent。架构铁律——一切模型生成由 Agent 本体完成（加载 13 个方法论 skill：7 个通用方法论 + 6 个风格文风要求 novel-style-*，按作品风格加载，含 AI 高频词分级词库）；8 个 novel_* 工具零模型调用，只做代码擅长的事：AI 味确定性检查（novel_lint）、名词一致性核对（novel_check，防凭空编造设定）、写前材料组装（novel_briefing，默认携带前 10 章结尾）、归档三件套落盘（novel_archive，格式校验拒收）、作品工程操作（novel_project，保存章节内置 lint 门禁，支持查询与拉取工程模板、obsidian/webui 双工程规范）、旧稿分章导入（novel_import）、体检材料组装（novel_scan_book）、WebUI 服务管理（novel_webui，网页端管理人物卡/设定卡/大纲剧情线，支持单工程与多工程工作区）。正文由 Agent 亲写（直出即净：细节种子/呼吸句/分场景 + lint 自检循环），设定衔接、文风一致与去 AI 味均有机制化保障，支持长篇项目的文件管理与长线推进。
+          以写小说为核心的全能创作 Agent：正文由 Agent 亲写，13 个方法论/风格 skill 按需加载；8 个 novel_* 工具零模型调用，负责正文 lint、名词一致性、写前材料、归档、工程与 WebUI 管理，支持长篇项目长线推进。
         order: 10
         plugins:
           # ── identity ────────────────────────────────────────────────────
