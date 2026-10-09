@@ -29,7 +29,7 @@
 | novel-style-scifi | 科幻/末世：设定推演、细节颗粒度、末世压力、人性抉择、科学克制、冷静叙述腔 |
 | novel-style-lightnovel | 轻小说/二次元风：轻快语感、角色声线、萌点写法、梗的分寸、日常主线配比 |
 
-**1 个插件（7 个工具，纯代码实现，无模型调用）**
+**1 个插件（8 个工具，纯代码实现，无模型调用）**
 
 | 工具 | 用途 |
 | --- | --- |
@@ -37,9 +37,39 @@
 | novel_check | 名词一致性核对：找出正文反复出现却未建档的高频词 |
 | novel_briefing | 写前材料组装：前 10 章结尾、人物卡、伏笔清单、时间线、文风卡 |
 | novel_archive | 归档三件套落盘：伏笔清单、时间线、归档记录 |
-| novel_project | 工程操作：初始化、保存章节（内置质量门禁）、进度统计 |
+| novel_project | 工程操作：查询/拉取工程模板、按规范（obsidian/webui）初始化、保存章节（内置质量门禁）、进度统计、整理索引 |
 | novel_import | 旧稿分章导入 |
 | novel_scan_book | 全书体检材料组装 |
+| novel_webui | WebUI 服务管理：安装/启动/停止小说工程的网页管理端，支持单工程与多工程工作区 |
+
+## 工程规范
+
+创建小说工程时先选**工程规范**（`novel_project action=初始化工程 规范=…`）：
+
+| | obsidian（默认） | webui |
+| --- | --- | --- |
+| 内容数据 | 纯 Markdown | 纯 Markdown（与 obsidian 完全一致） |
+| 额外文件 | 无 | `.webui/` 隐藏目录（Obsidian 不显示） |
+| 编辑方式 | Obsidian / Agent / 文本编辑器 | 上述全部 + 浏览器网页 |
+| 多工程管理 | 逐个打开 | 工作区模式，一个页面集中管理所有小说工程 |
+
+两种规范共享同一批 md 文件（**md 是唯一事实源**），随时互转：obsidian 工程 `novel_webui action=安装服务` 原地升级为 webui；删掉 `.webui/` 即回到纯 obsidian。详见 [webui/README.md](webui/README.md)。
+
+webui 规范的网页管理端（零 npm 依赖，默认只监听 127.0.0.1）提供：人物卡/设定卡管理（新建内置《novel-project》格式脚手架）、大纲与剧情线表格编辑、章节阅读与保存（执行与 Agent 相同的质量门禁）、伏笔/时间线表格编辑、AI 味检查（与 novel_lint 同源规则）、全文搜索、旧稿分章、字数统计。
+
+## 工程模板
+
+工程骨架是**数据化的模板**（`templates/` 目录），Agent 初始化工程时按 id 整套拉取，不必从零搭建：
+
+| 模板 | 说明 |
+| --- | --- |
+| blank | 空白工程：标准骨架 + 全部待填占位（默认） |
+| hotblood-xuanhuan | 热血玄幻：金手指/升级链总纲、力量体系等级阶梯、爽点规划表（压转爽钩）、主角人物卡 |
+| mystery-suspense | 悬疑诡秘：谜面与真相分离、线索登记表（公平性自查）、规则与禁忌 |
+| romance-sweet | 甜宠言情：核心 CP 总纲、感情线节点表（糖点节奏）、双主角人物卡（语言指纹） |
+
+- 查询：`novel_project action=查询模板`；使用：`novel_project action=初始化工程 title=书名 template=hotblood-xuanhuan 规范=webui`
+- 模板与规范可任意组合；在小说工程的公共父目录放 `templates/<id>/` 即为工作区自定义模板（优先于内置）。编写规范见 [templates/README.md](templates/README.md)。
 
 ## 安装
 
@@ -66,6 +96,7 @@ npm run verify:kernel           # 目录式路线冒烟（0.1.2，硬断言：ro
 npm run kernel:install:bundle   # bundle 验证内核（@deepseek-ai/dsh@0.2.0-rc.2）
 npm run verify:bundle           # bundle 路线冒烟（≥ 0.1.7，硬断言同上）
 npm run verify:acp              # 交互式 ACP 冒烟（目录式）
+npm run verify:webui            # WebUI 服务 + 工程模板冒烟（不需要 dsh 内核）
 ```
 
 CI（`.github/workflows/verify.yml`）在 push 时自动跑同一套验证。`tools/` 是开发工具，不随预设安装。

@@ -9,14 +9,33 @@
 //   · novel_lint      确定性 AI 味检查（纯代码规则，秒回不耗模型）
 //   · novel_briefing  写前材料组装（读工程文件，返回结构化原始材料）
 //   · novel_archive   归档落盘（Agent 按格式提取三段更新，工具原子写入）
-//   · novel_project   作品工程文件操作（初始化/保存/统计/索引）
+//   · novel_project   作品工程文件操作（查询/拉取工程模板、obsidian|webui 双
+//                     规范初始化、保存/统计/索引）
 //   · novel_import    旧稿分章落盘（纯代码分章；逆推由 Agent 按 skill 完成）
 //   · novel_scan_book 体检材料组装（选章+汇总工程材料，分析由 Agent 完成）
+//   · novel_webui     WebUI 服务管理（把零依赖网页管理端装进工程 .webui/ 并
+//                     后台拉起，支持单工程与多工程工作区）
 // - 写前材料 → Agent 亲写（生成时防味干预）→ novel_lint 自检循环 → 落盘 →
 //   novel_archive，构成每章闭环；方法论全部住在 skills/ 目录。
 //
+// 工程规范（spec）：obsidian=纯 Markdown（Obsidian 友好）；webui=同一批 md
+// 文件之上叠加轻量 Web 服务（.webui/，md 仍是唯一事实源）。工程模板
+// （templates/）是数据化的工程骨架，Agent 查询后按 id 整套拉取。
+//
 // 只使用 Node 内建模块与 Cordis 上下文服务（不 import 外部 npm 包，预设目录
-// 在用户主目录下无法解析 node_modules）。
+// 在用户主目录下无法解析 node_modules）。相对路径 import 仅指向本包内的
+// webui/lint.mjs（正文铁律检查的唯一实现，与 WebUI 服务共享同一套规则）。
+
+import fsMod from 'node:fs';
+import pathMod from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { lintText, chapterHeadingRe } from '../webui/lint.mjs';
+
+// 预设/包自身安装位（plugins/ 的上一级）：工程模板与 WebUI 资产的读取来源。
+const pkgRoot = fileURLToPath(new URL('../', import.meta.url));
+const WEBUI_ASSETS = ['server.mjs', 'index.html', 'lint.mjs'];
+const WEBUI_VERSION_RE = /^export const VERSION = '([^']+)';/m;
 
 // ---------------- 共享工具函数 ----------------
 
@@ -131,147 +150,10 @@ export default {
     }
 
     // ---------------- 确定性 AI 味检查（纯代码，不调用模型） ----------------
-    // 把“正文铁律”中可量化的规则编译为计数/正则检查：能数出来的（标点、禁词、
-    // 副词频次、句式频次、比喻密度、句长波动、同句式连用）交给代码逐条核对，
-    // 模型自查只兜底不可量化项（视角越界、情绪标签、说明书腔）。
-    // 返回 { hardCount, softCount, report }：hard=必须修的硬违规，soft=建议逐条核对。
-    // 部分指标设计思路参考 MIT 开源项目 chinese-webnovel-skills（网文工坊，
-    // github.com/tance-mang/chinese-webnovel-skills），实现为本项目独立编写；
-    // 详见 README“参考来源与致谢”。
-    function lintText(body) {
-      const issues = [];
-      const occurs = (w) => body.split(w).length - 1;
-      const countRe = (re) => (body.match(re) || []).length;
-
-      // 硬违规：标点纪律（整章级）
-      const dash = countRe(/——/g);
-      if (dash > 1) issues.push(['hard', `破折号（——）出现 ${dash} 次`, '整章上限 1 次，且只用于对话被打断']);
-      const ellipsis = countRe(/……/g);
-      if (ellipsis > 2) issues.push(['hard', `省略号（……）出现 ${ellipsis} 次`, '整章上限 2 次，只用于对话犹豫']);
-      const semis = countRe(/；/g);
-      if (semis > 0) issues.push(['hard', `正文出现分号 ${semis} 处`, '正文不用分号；一句话说不完拆成两句']);
-      // 硬违规：感叹号按段（一段最多 1 个）
-      const badPara = [];
-      for (const p of body.split(/\n+/)) {
-        if (!p.trim()) continue;
-        const n = (p.match(/[！!]/g) || []).length;
-        if (n > 1) badPara.push(p.trim().slice(0, 14));
-      }
-      if (badPara.length) issues.push(['hard', `${badPara.length} 个段落感叹号超过 1 个`, `如“${badPara[0]}…”`]);
-      // 硬违规：标点堆砌情绪
-      const stacked = countRe(/[？！]{2,}|[。]{3,}/g);
-      if (stacked > 0) issues.push(['hard', `标点堆砌（？？/！！等）${stacked} 处`, '禁止用标点堆砌情绪']);
-      // 硬违规：正文残留 Markdown
-      if (/^#{1,6}\s|\*\*|```/.test(body)) issues.push(['hard', '正文残留 Markdown 符号（#/```/加粗）', '正文必须纯文本']);
-      // 硬违规：简体网文标点规范——直角引号/英文引号/错误省略号/装饰符号
-      const cornerQuotes = countRe(/[「」『』]/g);
-      if (cornerQuotes > 0) issues.push(['hard', `直角引号「」『』出现 ${cornerQuotes} 处`, '简体网文用弯双引号""（嵌套用\'\'），不用直角引号']);
-      const engQuotes = countRe(/["][^"\n]{1,40}["]/g);
-      if (engQuotes > 0) issues.push(['hard', `疑似英文直引号 "…" 出现 ${engQuotes} 处`, '一律改为中文弯引号""']);
-      const badEllipsis = countRe(/\.\.\.|。。。/g);
-      if (badEllipsis > 0) issues.push(['hard', `错误省略号（.../。。。）出现 ${badEllipsis} 处`, '中文省略号用 ……（六点一个标点）']);
-      const decorations = countRe(/[✦✨◆●★☆♦❖✳✴]/g);
-      if (decorations > 0) issues.push(['hard', `装饰符号（✦✨◆★等）出现 ${decorations} 处`, '正文与标题一律不撒装饰符号，分隔用空行']);
-
-      // 软违规：禁用词与模板化表达（一级套路化，出现即改；分级词库见 novel-ai-lexicon skill）
-      const banned = ['心中一沉', '瞳孔骤缩', '倒吸一口凉气', '后背发凉', '心脏漏跳', '指尖微颤', '眼底闪过', '嘴角勾起', '勾起一抹', '嘴角微微上扬', '嘴角扬起', '面色一变', '神色复杂', '眼中闪过', '心中一凛', '心中一动', '心下了然', '心中了然', '指节泛白', '指节发白', '微微挑眉', '不容置疑', '不可置信', '行云流水', '话锋一转', '眼神深邃', '目瞪口呆', '嘴巴张得能塞下', '时间仿佛', '像淬了毒', '重重砸在', '眼中流露出', '空气凝滞', '空气安静', '空气瞬间安静', '脸上堆满了笑', '世界都安静', '远没有这么简单', '不知过了多久', '一室寂静', '难以言喻', '无法形容', '意味深长', '耐人寻味', '他不知道的是', '复杂的情绪', '眼眸', '薄唇', '不卑不亢', '隐隐有了猜测', '近乎偏执', '力道大得惊人', '让空气的温度都下降', '透露出的寒意', '像在看一个',
-        // 第二代伪外化与套话（AI 味新特征，见 novel-ai-lexicon 结构层）
-        '呼吸一滞', '呼吸一窒', '心头一紧', '喉结', '指腹摩挲', '眸光', '眸色', '眸子', '眸底', '笑意不达眼底', '几不可察', '几不可闻', '气氛降到', '沉默蔓延', '过了一个世纪', '才刚刚开始', '深不可测', '高深莫测',
-        // 数字装具体（秒表式计时与“第 N 次”模板）
-        '沉默了三秒', '沉默了几秒', '停顿了几秒', '停顿了三秒', '三秒后', '几秒钟后', '两秒钟', '第无数次', '数不清第几次'];
-      const bannedHits = [];
-      for (const w of banned) {
-        const n = occurs(w);
-        if (n > 0) bannedHits.push(`“${w}”×${n}`);
-      }
-      if (bannedHits.length) issues.push(['soft', '禁用词/模板化表达', bannedHits.join('、')]);
-      // 软违规：万能量词
-      const quantHits = [];
-      for (const w of ['一丝', '一抹', '几分', '一股', '些许']) {
-        const n = occurs(w);
-        if (n > 0) quantHits.push(`“${w}”×${n}`);
-      }
-      if (quantHits.length) issues.push(['soft', '万能量词', `${quantHits.join('、')}（全砍）`]);
-      // 软违规：副词/高频词频次（每词上限 2 次；二级词库见 novel-ai-lexicon）
-      const advHits = [];
-      for (const w of ['缓缓', '轻轻', '微微', '不由得', '忍不住', '下意识地', '突然', '忽然', '猛地', '顿时', '瞬间', '立刻', '连忙', '渐渐', '显然', '果然', '沉吟', '小心翼翼', '不动声色', '似乎', '淡淡', '不禁', '深吸一口气', '下一秒', '下一瞬', '随即', '旋即', '闻言', '见状', '注视', '凝视']) {
-        const n = occurs(w);
-        if (n > 2) advHits.push(`“${w}”×${n}`);
-      }
-      if (advHits.length) issues.push(['soft', '副词/高频词频次超限（每词上限 2 次）', advHits.join('、')]);
-      // 软违规：次高频词密度（正常词限频不限用，每词上限 3 次；超限说明落入模板）
-      const softHits = [];
-      for (const w of ['顿了顿', '沉默', '苦笑', '无奈', '半晌', '回过神', '一时间', '若有所思', '似笑非笑', '攥紧']) {
-        const n = occurs(w);
-        if (n > 3) softHits.push(`“${w}”×${n}`);
-      }
-      if (softHits.length) issues.push(['soft', '次高频词密度超限（每词上限 3 次）', `${softHits.join('、')}——正常词限频不限用，超限说明写成了模板反应`]);
-      // 软违规：极端词堆砌（密度制：每千字 ≤2）
-      const kChars = Math.max(1, Math.round(body.replace(/\s+/g, '').length / 1000));
-      const extreme = ['非常', '极其', '极大', '无比', '十分', '瞬间', '顿时', '刹那'];
-      const extremeTotal = extreme.reduce((s, w) => s + occurs(w), 0);
-      if (extremeTotal > kChars * 2) issues.push(['soft', `极端词 ${extremeTotal} 个（约 ${kChars} 千字）`, '密度应 ≤2/千字；程度靠具体画面给，删九成']);
-      // 软违规：句式频次
-      const buShi = countRe(/不是[^。！？\n]{0,30}而是/g);
-      if (buShi > 1) issues.push(['soft', `“不是……而是……”出现 ${buShi} 次`, '整章上限 1 次']);
-      const jiuZai = countRe(/就在这时|刹那间|的瞬间|此刻|这一刻|一时之间/g);
-      if (jiuZai > 2) issues.push(['soft', `“就在这时/刹那间/的瞬间/此刻/这一刻”合计 ${jiuZai} 次`, '整章合计上限 2 次']);
-      // 软违规：比喻引导词密度（同一引导词上限 3）
-      const simileHits = [];
-      const likeCount = countRe(/(?<![画肖雕影录照相])像/g);
-      if (likeCount > 3) simileHits.push(`“像”×${likeCount}`);
-      for (const w of ['仿佛', '如同', '宛如', '恰似']) {
-        const n = occurs(w);
-        if (n > 3) simileHits.push(`“${w}”×${n}`);
-      }
-      if (simileHits.length) issues.push(['soft', '比喻引导词频次（同一引导词上限 3，一段最多一个比喻）', simileHits.join('、')]);
-      // 软违规：AI 转折词/书面连接词/论文腔
-      const aiConn = ['然而，', '与此同时', '不仅如此', '值得一提的是', '不得不说', '综上所述', '由此可见', '某种意义上', '总而言之'];
-      const aiConnHits = aiConn.filter((w) => occurs(w) > 0).map((w) => `“${w.replace(/，$/, '')}”`);
-      if (aiConnHits.length) issues.push(['soft', 'AI 转折词/书面连接词', `${aiConnHits.join('、')}——删掉或换成口语衔接`]);
-      // 软违规：句长过于均匀（句长波动检测：段内长短句应有落差）
-      const sentences = body.split(/[。！？\n]+/).map((s) => s.trim()).filter((s) => s.length > 1);
-      if (sentences.length >= 8) {
-        const lens = sentences.map((s) => s.length);
-        const avg = lens.reduce((a, b) => a + b, 0) / lens.length;
-        const variance = lens.reduce((s, l) => s + (l - avg) ** 2, 0) / lens.length;
-        const cv = Math.sqrt(variance) / avg; // 变异系数
-        const shortCount = lens.filter((l) => l <= 8).length;
-        if (cv < 0.35 && shortCount < 3) issues.push(['soft', `句长过于均匀（变异系数 ${cv.toFixed(2)}，短句仅 ${shortCount} 个）`, '长短句要有落差：加碎句/单句成段，偶尔来一个 40 字长句']);
-      }
-      // 软违规：连续同句式开头（连续 3+ 句以相同人称代词/人名开头）
-      const starts = sentences.map((s) => (s.match(/^(他|她|它|我|你|林|苏|叶|楚|萧|陈|秦|李|张|王|刘|周|赵)/) || [])[1]).filter(Boolean);
-      let run = 1; let maxRun = 1;
-      for (let i = 1; i < starts.length; i += 1) {
-        if (starts[i] === starts[i - 1]) { run += 1; maxRun = Math.max(maxRun, run); } else run = 1;
-      }
-      if (maxRun >= 4) issues.push(['soft', `连续 ${maxRun} 句以“${starts[0] || '同一人称'}”类开头`, '连续同句式是强 AI 特征：换主语、倒装、或用动作句切入']);
-      // 软违规：心理描写密度（一章不超 5 处）
-      const psych = countRe(/心中|心头|涌上|感到/g);
-      if (psych > 5) issues.push(['soft', `心理/情绪标签类表达约 ${psych} 处`, '心理描写一章不超 5 处，改用行为外化']);
-      // 软违规：对话标签密度（AI 每句对话都挂“X道”类标签；真人多数靠上下文与动作识别说话人）
-      const quoteLines = Math.floor(countRe(/[“”]/g) / 2);
-      const tagTotal = ['说道', '问道', '答道', '应道', '开口道', '开口说道', '沉声道', '冷声道', '淡淡道', '低声道', '轻声道', '缓缓开口', '笑道', '叹道', '应了一声'].reduce((s, w) => s + occurs(w), 0);
-      if (tagTotal > Math.max(6, quoteLines * 0.5)) issues.push(['soft', `对话标签约 ${tagTotal} 个（引号句约 ${quoteLines} 句）`, '半数以上对话挂“X道”类标签是 AI 特征：能删则删，用动作行代替']);
-      // 软违规：段尾总结句（每段最后一句都在收束/点题/升华）
-      const tailSummary = body.split(/\n+/).map((p) => p.trim()).filter(Boolean)
-        .map((p) => (p.split(/(?<=[。！？…])/).pop() || '').trim())
-        .filter((s) => /^(他知道|她知道|他明白|她明白|这一刻，|这一次，|或许，|也许，|仿佛)/.test(s)).length;
-      if (tailSummary > 2) issues.push(['soft', `${tailSummary} 个段落以总结/点题句收尾`, '段尾停在动作、台词或物证上，不要每段都收束']);
-      // 软违规：章末模板收尾（气氛句/升华句当钩子）
-      const tailText = body.slice(-80);
-      const hookTpl = ['才刚刚开始', '夜，深了', '夜色渐深', '故事，才', '他知道，这一切', '他不知道的是'].filter((w) => tailText.includes(w));
-      if (hookTpl.length) issues.push(['soft', `章末疑似模板收尾（${hookTpl.join('、')}）`, '钩子必须是具体事件或具体台词，不是气氛句']);
-
-      const hardCount = issues.filter((i) => i[0] === 'hard').length;
-      const softCount = issues.length - hardCount;
-      const lines = [];
-      if (!issues.length) lines.push('通过：未发现可量化的铁律违规（视角越界、说明书腔、情绪太平均等不可量化项仍需人工/模型自查）。');
-      for (const [level, name, detail] of issues) {
-        lines.push(`- ${level === 'hard' ? '【必须修】' : '【建议查】'}${name}——${detail}`);
-      }
-      return { hardCount, softCount, report: lines.join('\n') };
-    }
+    // 实现在本包 webui/lint.mjs（与 WebUI 服务共享同一套规则，一处维护）：
+    // 能量化的铁律（标点、禁词、副词/极端词频次、句式频次、比喻密度、句长波动、
+    // 同句式连用）交给代码逐条核对，模型自查只兜底不可量化项（视角越界、情绪
+    // 标签、说明书腔）。返回 { hardCount, softCount, report }。
 
     // 工具注册工厂：spec = { name, description, parameters, run, timeoutMs? }
     function tool(spec) {
@@ -558,13 +440,107 @@ export default {
     });
 
     // ---------------- 4. 作品工程 ----------------
+    // ---- 工程模板读取（templates/ 是数据目录，Agent 直接拉模板而无需从零搭建）----
+    // 模板查找顺序：<工作区>/templates/<id>（用户自定义，可覆盖）→ <包安装位>/templates/<id>。
+    // 模板目录结构：<id>/template.yml（清单）+ <id>/files/**（文件树，内容支持 {{title}} 变量）。
+    function parseTemplateYml(text) {
+      const meta = {};
+      for (const raw of String(text).split('\n')) {
+        const m = raw.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
+        if (!m) continue;
+        let v = m[2].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+        meta[m[1]] = v;
+      }
+      return meta;
+    }
+    function readTemplateDirAt(base, id) {
+      const dir = pathMod.join(base, id);
+      let metaRaw;
+      try { metaRaw = fsMod.readFileSync(pathMod.join(dir, 'template.yml'), 'utf8'); } catch { return null; }
+      const files = new Map();
+      const filesDir = pathMod.join(dir, 'files');
+      const walk = (sub) => {
+        for (const e of fsMod.readdirSync(sub ? pathMod.join(filesDir, sub) : filesDir, { withFileTypes: true })) {
+          const rel = sub ? `${sub}/${e.name}` : e.name;
+          if (e.isDirectory()) walk(rel);
+          else if (e.isFile() && !e.name.startsWith('.')) files.set(rel, fsMod.readFileSync(pathMod.join(filesDir, rel), 'utf8'));
+        }
+      };
+      try { walk(''); } catch (err) { return null; }
+      if (!files.size) return null;
+      return { meta: parseTemplateYml(metaRaw), id, files, source: base };
+    }
+    function loadTemplate(id, root) {
+      const bases = [pathMod.resolve(root, 'templates'), pathMod.join(pkgRoot, 'templates')];
+      for (const base of bases) {
+        const t = readTemplateDirAt(base, String(id));
+        if (t) return t;
+      }
+      return null;
+    }
+    function listTemplates(root) {
+      const out = [];
+      const seen = new Set();
+      const bases = [[pathMod.resolve(root, 'templates'), '工作区'], [pathMod.join(pkgRoot, 'templates'), '内置']];
+      for (const [base, label] of bases) {
+        let entries;
+        try { entries = fsMod.readdirSync(base, { withFileTypes: true }); } catch { continue; }
+        for (const e of entries) {
+          if (!e.isDirectory() || e.name.startsWith('.') || seen.has(e.name)) continue;
+          const t = readTemplateDirAt(base, e.name);
+          if (!t) continue;
+          seen.add(e.name);
+          out.push({ ...t, label });
+        }
+      }
+      return out;
+    }
+    const applyVars = (text, vars) => String(text).replace(/\{\{(\w+)\}\}/g, (all, k) => (vars[k] !== undefined ? vars[k] : all));
+    // WebUI 资产安装（初始化 webui 工程 / novel_webui 安装服务 共用）：幂等，可作升级
+    const webuiVersion = () => {
+      try {
+        const src = fsMod.readFileSync(pathMod.join(pkgRoot, 'webui', 'server.mjs'), 'utf8');
+        return (src.match(WEBUI_VERSION_RE) || [])[1] || '未知';
+      } catch { return null; }
+    };
+    async function installWebuiAssets(fs, root, policy) {
+      const srcDir = pathMod.join(pkgRoot, 'webui');
+      const version = webuiVersion();
+      const installed = [];
+      for (const name of WEBUI_ASSETS) {
+        let content;
+        try { content = fsMod.readFileSync(pathMod.join(srcDir, name), 'utf8'); } catch { continue; }
+        const target = await fs.resolve(`.webui/${name}`, { cwd: root });
+        await fs.writeText(target, content, undefined, undefined, policy);
+        installed.push(name);
+      }
+      // 可选配置：仅首次创建（保留用户已改的配置）。存在性用「读一把」判断，
+      // 不依赖 fs.resolve 对缺失文件的行为。
+      let existingCfg = null;
+      try { existingCfg = await fs.readText(await fs.resolve('.webui/config.json', { cwd: root })); } catch { existingCfg = null; }
+      if (existingCfg === null) {
+        const target = await fs.resolve('.webui/config.json', { cwd: root });
+        await fs.writeText(target, `${JSON.stringify({
+          $comment: '小说工程 WebUI 可选配置（不填的键用默认值）：port 端口（默认 4311，被占用自动顺延）；host 监听地址（默认 127.0.0.1，勿随意改成 0.0.0.0）；token 访问令牌（绑定非本机地址时必填）。',
+          port: 0,
+          host: '127.0.0.1',
+          token: '',
+        }, null, 2)}\n`, undefined, undefined, policy);
+        installed.push('config.json');
+      }
+      return { installed, version };
+    }
+
     tool({
       name: 'novel_project',
-      description: '作品工程：把小说组织成 Obsidian 友好的 Markdown 工程——初始化目录结构（正文/大纲/设定集/人物卡/归档/伏笔清单/时间线/文风卡）、保存章节、统计进度、整理作品索引。纯文件操作，零模型调用；内容生成（伏笔清单表/时间线表等）由你完成后用文件工具或本工具落盘。',
+      description: '作品工程：把小说组织成工程目录（正文/大纲/设定集/人物卡/归档/伏笔清单/时间线/文风卡/剧情线）。创建工程时先选工程规范——obsidian（默认，纯 Markdown，Obsidian 直接打开）或 webui（同样以 Markdown 为唯一事实源，额外安装轻量 WebUI 服务，可网页管理人物卡/设定卡/大纲剧情线，用 novel_webui 启动）——再选工程模板（查询模板列出可直接拉取的骨架，不必从零搭建）。还负责保存章节（内置质量门禁）、统计进度、整理索引。纯文件操作，零模型调用。',
       timeoutMs: 120000,
       parameters: {
-        action: { type: 'string', enum: ['初始化工程', '保存章节', '统计进度', '整理索引'], description: '操作类型', required: true },
+        action: { type: 'string', enum: ['初始化工程', '查询模板', '保存章节', '统计进度', '整理索引'], description: '操作类型', required: true },
         title: { type: 'string', description: '作品名（初始化/整理索引时用）' },
+        规范: { type: 'string', enum: ['obsidian', 'webui'], description: '工程规范（初始化工程时用，默认 obsidian）：obsidian=纯 Markdown 工程；webui=Markdown 之上叠加 WebUI 服务（.webui/ 目录，Obsidian 不显示隐藏目录，两种规范可随时混用）' },
+        template: { type: 'string', description: '工程模板 id（初始化工程时用，可选）。先用 查询模板 列出可用模板；不传则拉取内置空白模板（blank），模板目录缺失时回退到内置骨架' },
         chapter_number: { type: 'integer', description: '章节序号（保存章节时用）' },
         chapter_title: { type: 'string', description: '章节标题（保存章节时用）' },
         content: { type: 'string', description: '章节正文（保存章节时用，纯文本）' },
@@ -578,22 +554,69 @@ export default {
         const write = proj.write;
         const action = args && typeof args.action === 'string' ? args.action : '';
         const out = [];
+        if (action === '查询模板') {
+          const list = listTemplates(root);
+          if (!list.length) {
+            return `没有找到任何工程模板（查找位置：${pathMod.resolve(root, 'templates')} 与 ${pathMod.join(pkgRoot, 'templates')}）。\n仍可直接 初始化工程：不传 template 时会使用内置空白骨架。`;
+          }
+          const lines = ['可用工程模板（初始化工程时把模板 id 传给 template 参数即可整套拉取；规范 obsidian/webui 与模板可任意组合）：', ''];
+          for (const t of list) {
+            lines.push(`- ${t.id}（${t.label}）——${t.meta.name || ''}：${t.meta.description || ''}`);
+          }
+          lines.push('');
+          lines.push('用法示例：novel_project action=初始化工程 title=书名 template=hotblood-xuanhuan 规范=webui');
+          return lines.join('\n');
+        }
         if (action === '初始化工程') {
           const t = args && args.title ? args.title : '未命名作品';
-          await write('README.md', `# ${t}\n\n> 作品索引（由 novel_project 维护，双链导航）\n\n- 简介：\n- 状态：\n\n## 快速导航\n\n- [[伏笔清单]] · [[时间线]] · [[大纲/总纲|总纲]]\n- [[人物卡/_索引|人物卡]] · [[设定集/_索引|设定集]]\n- 章节：见下方（整理索引后自动生成）\n`);
-          await write('伏笔清单.md', `# 伏笔清单\n\n| 伏笔 | 铺设位置 | 发酵 | 回收位置 | 状态 |\n| --- | --- | --- | --- | --- |\n`);
-          await write('时间线.md', `# 时间线\n\n| 时间 | 事件 | 参与人物 | 影响/后续 |\n| --- | --- | --- | --- |\n`);
-          await write('大纲/总纲.md', '# 总纲\n\n## 核心设定\n\n## 主线\n\n## 分卷规划\n');
-          await write('设定集/_索引.md', '# 设定集索引\n\n> 每类设定一个文件；文件之间与人物卡用双链互相关联（如 [[主角]]、[[设定集/力量体系|力量体系]]）\n\n');
-          await write('设定集/世界观.md', '# 世界观\n\n（核心世界观设定；相关链接：[[设定集/力量体系]]、[[设定集/地理]]）\n');
-          await write('设定集/力量体系.md', '# 力量体系\n\n（等级/功法/战力规则与代价）\n');
-          await write('设定集/地理.md', '# 地理\n\n（大陆/国家/城市/重要地点）\n');
-          await write('设定集/势力.md', '# 势力\n\n（宗门/家族/组织/阵营）\n');
-          await write('人物卡/_索引.md', '# 人物卡索引\n\n> 每个角色一个文件；关系用双链互链（如 [[林远]]），设定关联用 [[设定集/xxx]]\n\n');
-          await write('归档/说明.md', '# 归档\n\n每章归档一个文件：第NNN章-归档.md（由 novel_archive 落盘）\n');
-          await write('正文/说明.md', '# 正文\n\n每章一个文件：`第NNN章-标题.md`\n');
-          await write('文风卡.md', '# 文风卡\n\n> 按《novel-project》的文风卡格式，从基准章节生成后保存到本文件；写正文前必读对齐。重新生成直接覆盖。\n');
-          out.push('已初始化工程（每人一文件 + 设定分类 + 双链索引 + 文风卡占位）：README.md、伏笔清单、时间线、文风卡、大纲/总纲、设定集/（世界观/力量体系/地理/势力/_索引）、人物卡/_索引、归档/、正文/');
+          const spec = args && args.规范 === 'webui' ? 'webui' : 'obsidian';
+          const vars = { title: t, date: new Date().toISOString().slice(0, 10) };
+          // 组装文件树：指定模板 → 内置 blank 模板 → 内置骨架兜底
+          let files = null;
+          let tplLabel = '';
+          if (args && args.template) {
+            const tpl = loadTemplate(args.template, root);
+            if (!tpl) {
+              const known = listTemplates(root).map((x) => x.id).join('、') || '（无）';
+              throw new Error(`找不到工程模板「${args.template}」。可用模板：${known}。先用 action=查询模板 查看详情。`);
+            }
+            files = tpl.files;
+            tplLabel = `${tpl.id}（${tpl.label}）`;
+          } else {
+            const blank = loadTemplate('blank', root);
+            if (blank) { files = blank.files; tplLabel = 'blank（内置空白）'; }
+          }
+          if (files) {
+            for (const [rel, content] of files) await write(rel, applyVars(content, vars));
+          } else {
+            // 内置骨架兜底（templates/ 随包分发；此分支仅在安装不完整时触达）
+            await write('README.md', `# ${t}\n\n> 作品索引（由 novel_project 维护，双链导航）\n\n- 简介：\n- 状态：\n\n## 快速导航\n\n- [[伏笔清单]] · [[时间线]] · [[大纲/总纲|总纲]] · [[大纲/剧情线|剧情线]]\n- [[人物卡/_索引|人物卡]] · [[设定集/_索引|设定集]]\n- 章节：见下方（整理索引后自动生成）\n`);
+            await write('伏笔清单.md', `# 伏笔清单\n\n| 伏笔 | 铺设位置 | 发酵 | 回收位置 | 状态 |\n| --- | --- | --- | --- | --- |\n`);
+            await write('时间线.md', `# 时间线\n\n| 时间 | 事件 | 参与人物 | 影响/后续 |\n| --- | --- | --- | --- |\n`);
+            await write('大纲/总纲.md', '# 总纲\n\n## 核心设定\n\n## 主线\n\n## 分卷规划\n');
+            await write('设定集/_索引.md', '# 设定集索引\n\n> 每类设定一个文件；文件之间与人物卡用双链互相关联（如 [[主角]]、[[设定集/力量体系|力量体系]]）\n\n');
+            await write('设定集/世界观.md', '# 世界观\n\n（核心世界观设定；相关链接：[[设定集/力量体系]]、[[设定集/地理]]）\n');
+            await write('设定集/力量体系.md', '# 力量体系\n\n（等级/功法/战力规则与代价）\n');
+            await write('设定集/地理.md', '# 地理\n\n（大陆/国家/城市/重要地点）\n');
+            await write('设定集/势力.md', '# 势力\n\n（宗门/家族/组织/阵营）\n');
+            await write('人物卡/_索引.md', '# 人物卡索引\n\n> 每个角色一个文件；关系用双链互链（如 [[林远]]），设定关联用 [[设定集/xxx]]\n\n');
+            await write('归档/说明.md', '# 归档\n\n每章归档一个文件：第NNN章-归档.md（由 novel_archive 落盘）\n');
+            await write('正文/说明.md', '# 正文\n\n每章一个文件：`第NNN章-标题.md`\n');
+            await write('文风卡.md', '# 文风卡\n\n> 按《novel-project》的文风卡格式，从基准章节生成后保存到本文件；写正文前必读对齐。重新生成直接覆盖。\n');
+          }
+          // 剧情线：模板未提供时补标准空表（webui 页面与 Obsidian 都按表读写）
+          if (!files || !files.has('大纲/剧情线.md')) {
+            await write('大纲/剧情线.md', `# ${t} · 剧情线\n\n> 网页端与 Obsidian 都按表格读写：线名/类型（主线|支线|感情线|暗线）/状态（铺设中|推进中|已收束）/起点/终点/关键节点\n\n| 线名 | 类型 | 状态 | 起点 | 终点 | 关键节点 |\n| --- | --- | --- | --- | --- | --- |\n`);
+          }
+          out.push(`已初始化工程：规范=${spec}${tplLabel ? ` · 模板=${tplLabel}` : ''}（作品名「${t}」）`);
+          out.push(`目录：README、伏笔清单、时间线、文风卡、大纲/（总纲+剧情线）、设定集/（分类+_索引）、人物卡/_索引、归档/、正文/`);
+          if (spec === 'webui') {
+            const { installed, version } = await installWebuiAssets(fs, root, policy);
+            out.push(`WebUI 资产已安装到 .webui/（${installed.join('、')}，服务 v${version || '?'}）；用 novel_webui action=启动服务 拉起后把地址给用户。`);
+          } else {
+            out.push('提示：之后想改用网页管理，novel_webui action=安装服务 即可原地升级为 webui 规范（md 文件不动）。');
+          }
+          out.push('下一步（由你完成）：按《novel-project》与所选模板里的指引填充总纲、人物卡、设定集；有文风基准章节后生成文风卡。');
         } else if (action === '保存章节') {
           const num = args && args.chapter_number ? args.chapter_number : 1;
           const body = args && typeof args.content === 'string' && args.content.trim() ? args.content : '';
@@ -655,6 +678,112 @@ export default {
       },
     });
 
+    // ---------------- 4.5 WebUI 服务管理（webui 工程规范的服务层） ----------------
+    // 服务本体是零依赖 Node 脚本（webui/server.mjs），从这里以分离进程拉起，
+    // 不依赖 Agent 进程存活；运行状态写在 <根>/.webui/state.json。
+    const sleepMs = (ms) => new Promise((r) => { setTimeout(r, ms); });
+    const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    async function probeWebui(port, host) {
+      const req = await import('node:http').then((h) => h.request);
+      return new Promise((resolve) => {
+        const r = req({ host: host === '0.0.0.0' ? '127.0.0.1' : host, port, path: '/api/state', timeout: 900 }, (res) => {
+          res.resume();
+          resolve(res.statusCode === 200);
+        });
+        r.on('error', () => resolve(false));
+        r.on('timeout', () => { r.destroy(); resolve(false); });
+        r.end();
+      });
+    }
+    async function readWebuiState(root) {
+      try { return JSON.parse(fsMod.readFileSync(pathMod.join(root, '.webui', 'state.json'), 'utf8')); } catch { return null; }
+    }
+
+    tool({
+      name: 'novel_webui',
+      description: '小说工程 WebUI 服务管理：把轻量网页管理端（零依赖单文件服务）安装进工程 .webui/ 并以后台进程启动，浏览器打开即可管理人物卡、设定卡、大纲与剧情线、章节、伏笔与时间线，并用 AI 味检查、全文搜索、旧稿分章、字数统计等工具。范围=工程 只管理当前作品；范围=工作区 把当前目录当作多工程工作区，自动发现其下全部小说工程、一个页面集中管理（适合把服务架在所有小说工程的公共父目录之外/之上）。md 文件始终是唯一事实源——网页、Obsidian、文件工具编辑的是同一批文件，随时混用。默认只监听 127.0.0.1，不对局域网开放。零模型调用。',
+      timeoutMs: 60000,
+      parameters: {
+        action: { type: 'string', enum: ['安装服务', '启动服务', '停止服务', '服务状态'], description: '操作类型', required: true },
+        范围: { type: 'string', enum: ['工程', '工作区'], description: '启动服务时用：工程=只管理当前作品（默认，工程内无服务副本时自动用包内副本）；工作区=当前目录为多工程工作区（用包内副本，服务状态存于 <工作区>/.webui/）' },
+        port: { type: 'integer', description: '服务端口（默认 4311，被占用自动顺延；也可在 .webui/config.json 里配置）' },
+      },
+      run: async (args, exec) => {
+        const fc = fsContext(exec);
+        if (!fc) throw new Error('文件系统服务不可用');
+        const { fs, root, policy } = fc;
+        const action = args && typeof args.action === 'string' ? args.action : '';
+        const scope = args && args.范围 === '工作区' ? '工作区' : '工程';
+        if (action === '安装服务') {
+          const { installed, version } = await installWebuiAssets(fs, root, policy);
+          return `WebUI 资产已安装/升级到 ${root} 的 .webui/（${installed.join('、')}，服务 v${version || '?'}）。之后可直接在该目录运行 node .webui/server.mjs --project . 或由本工具启动服务。已有 md 文件一律未动。`;
+        }
+        if (action === '启动服务') {
+          const stateFile = pathMod.join(root, '.webui', 'state.json');
+          let st = await readWebuiState(root);
+          if (st && st.pid && pidAlive(st.pid) && await probeWebui(st.port, st.host || '127.0.0.1')) {
+            return `服务已在运行：${st.url}（模式 ${st.mode}，v${st.version}，pid ${st.pid}）。无需重复启动；需要重启先 停止服务。`;
+          }
+          const srcDir = pathMod.join(root, '.webui');
+          const localServer = pathMod.join(srcDir, 'server.mjs');
+          const serverSrc = fsMod.existsSync(localServer) ? localServer : pathMod.join(pkgRoot, 'webui', 'server.mjs');
+          if (!fsMod.existsSync(serverSrc)) throw new Error('找不到 webui/server.mjs（工程内与预设安装位都没有）。先 安装服务，或重装本预设。');
+          const argv = [serverSrc, scope === '工作区' ? '--workspace' : '--project', root];
+          if (args && args.port) argv.push('--port', String(args.port));
+          fsMod.mkdirSync(srcDir, { recursive: true });
+          const logPath = pathMod.join(srcDir, 'server.log');
+          const out = fsMod.openSync(logPath, 'a');
+          let child;
+          try {
+            child = spawn(process.execPath, argv, { detached: true, stdio: ['ignore', out, out], cwd: root, windowsHide: true });
+          } finally {
+            fsMod.closeSync(out);
+          }
+          child.unref();
+          // 等待就绪：服务监听成功后会写 state.json
+          let ready = false;
+          for (let i = 0; i < 40 && !ready; i += 1) {
+            await sleepMs(250);
+            st = await readWebuiState(root);
+            ready = Boolean(st && st.port && await probeWebui(st.port, st.host || '127.0.0.1'));
+          }
+          if (!ready) throw new Error(`服务未能在 10 秒内就绪，请查看日志：${logPath}`);
+          const lines = [
+            `WebUI 服务已启动（${scope}模式，v${st.version}，pid ${st.pid}）。`,
+            `地址：${st.url}（把地址给用户，在浏览器打开即可管理${scope === '工作区' ? `工作区下的 ${st.projects ? '' : ''}全部工程` : '本工程'}）`,
+            st.tokenSet ? '该服务启用了访问令牌：页面首次打开会提示输入 token（配置在 .webui/config.json）。' : '未启用令牌（仅本机回环监听）。',
+            `停止方式：novel_webui action=停止服务；或访问 ${st.url}api/shutdown（POST）。日志：${logPath}`,
+            '提醒：md 文件仍是唯一事实源，网页与 Obsidian、文件工具编辑同一批文件；下一步的生成与检查工作照常由你和 novel_* 工具完成。',
+          ];
+          return lines.join('\n');
+        }
+        if (action === '停止服务') {
+          const st = await readWebuiState(root);
+          if (!st || !st.pid) return '没有找到运行记录（.webui/state.json 不存在），服务应当未在运行。';
+          try { process.kill(st.pid, 'SIGTERM'); } catch (err) { /* 进程可能已退出 */ }
+          let dead = !pidAlive(st.pid);
+          for (let i = 0; i < 12 && !dead; i += 1) {
+            await sleepMs(250);
+            dead = !pidAlive(st.pid);
+          }
+          if (!dead) {
+            try { process.kill(st.pid, 'SIGKILL'); } catch { /* 已退出 */ }
+          }
+          try { fsMod.rmSync(pathMod.join(root, '.webui', 'state.json'), { force: true }); } catch { /* 尽力清理 */ }
+          return `服务已停止（pid ${st.pid}${dead ? '' : '，已强制结束'}，模式 ${st.mode}）。md 工程文件不受影响。`;
+        }
+        if (action === '服务状态') {
+          const st = await readWebuiState(root);
+          if (!st) return `未运行。${scope === '工作区' ? '（工作区模式的状态存于 <工作区>/.webui/state.json）' : ''}可 action=启动服务 拉起。`;
+          const alive = pidAlive(st.pid) && await probeWebui(st.port, st.host || '127.0.0.1');
+          return alive
+            ? `运行中：${st.url}（${st.mode}模式，v${st.version}，pid ${st.pid}，自 ${st.startedAt} 起）`
+            : `未运行（有残留状态：pid ${st.pid} 已不响应）。可 action=启动服务 重新拉起。`;
+        }
+        throw new Error(`未知操作：${action}`);
+      },
+    });
+
     // ---------------- 5. 旧稿导入（纯代码分章） ----------------
     tool({
       name: 'novel_import',
@@ -673,8 +802,8 @@ export default {
         if (!text.trim()) throw new Error('缺少旧稿文本（text）');
         const start = args && args.chapter_number ? args.chapter_number : 1;
 
-        // 1) 分章：以独立的“第X章/回/节 标题”行为界
-        const headingRe = /^第[0-9零一二三四五六七八九十百千两]+[章回节].{0,30}$/;
+        // 1) 分章：以独立的“第X章/回/节 标题”行为界（规则与 WebUI 旧稿分章共享）
+        const headingRe = chapterHeadingRe;
         const chapters = [];
         let cur = null;
         for (const raw of text.split('\n')) {
@@ -795,7 +924,7 @@ export default {
 
 一、分工：模型生成全部由你完成，工具只做文件操作和检查
 - 润色、大纲、细纲、拆书、评阅、对话、场景、采访、合规、起名、文风卡、归档提取，这些创作与分析任务都没有对应的工具。先加载相关的 skill，再按 skill 里的流程亲自完成。
-- 七个工具只负责代码能完成的事。novel_lint 检查正文是否违反铁律；novel_check 核对正文里的名词是否都有档案出处；novel_briefing 读取工程文件并组装写前材料；novel_archive 把你提取好的归档内容写入工程；novel_project 管理工程目录并在保存章节时执行质量门禁；novel_import 把旧稿按章节标记拆分落盘；novel_scan_book 汇总全书体检所需的材料。
+- 八个工具只负责代码能完成的事。novel_lint 检查正文是否违反铁律；novel_check 核对正文里的名词是否都有档案出处；novel_briefing 读取工程文件并组装写前材料；novel_archive 把你提取好的归档内容写入工程；novel_project 管理工程目录（含查询与拉取工程模板）并在保存章节时执行质量门禁；novel_import 把旧稿按章节标记拆分落盘；novel_scan_book 汇总全书体检所需的材料；novel_webui 安装、启动、停止小说工程的网页管理服务。
 
 二、写正文的完整流程（每次亲写正文都走一遍）
 第一步，加载《novel-prose-standards》，按它要求的生成时干预来写。具体做法是：动笔前先为每个场景准备至少 3 个具体细节，比如具体数字、有专名的物件、身体化的动作，写作时把它们埋进去；每写三四个正常长度的句子，就接一个不超过 8 字的短句，或者让一句话单独成段；相邻的两段不要用同一种方式开头；全文不使用“仿佛”“似乎”“像是在”这类模糊词，直接写实际发生了什么。超过 2500 字的章节要按场景分段写，每段写之前先回看上一段的结尾。
@@ -838,7 +967,12 @@ export default {
 4. 写人物之前先查人物卡；新设定先写进设定集，再出现在正文里；伏笔必须登记进伏笔清单。称谓、战力、时间线全书保持一致。
 5. 设定必须有出处。正文里出现的每一个地名、组织、功法、物品、规则，动笔前都必须能在设定集或已写章节里找到出处。查不到的：要么先补进设定集再写，要么改用已有设定。出场人物同理——必须在人物卡或前文出现过，全新角色要先建人物卡。写完一章后回头对照材料自查一遍：本章有没有用到查无出处的东西，有没有和前文矛盾。
 6. 去 AI 味重写只用于外来文本和旧稿。正常创作从落笔就按规范写，不做“先带 AI 味、事后去味”的二道工序。
-7. 断更或新会话续写时：先用 novel_briefing 组装材料，或者直接读最近归档、伏笔清单和上一章结尾，找回状态后再动笔。`,
+7. 断更或新会话续写时：先用 novel_briefing 组装材料，或者直接读最近归档、伏笔清单和上一章结尾，找回状态后再动笔。
+
+七、工程规范与模板（建工程时先定这两件事）
+1. 工程规范二选一：obsidian（默认）=纯 Markdown 工程，Obsidian 直接打开编辑；webui=同样以 md 文件为唯一事实源，额外安装轻量网页管理服务（.webui/ 隐藏目录），可在浏览器里管理人物卡、设定卡、大纲与剧情线、章节、伏笔时间线，并提供 AI 味检查、全文搜索、旧稿分章等工具。两种规范可随时互转：novel_webui action=安装服务 即原地加装网页层，md 文件一个不动。
+2. 工程模板是现成的工程骨架数据。初始化工程前先 action=查询模板 看有哪些可拉取的模板（热血玄幻、悬疑诡秘、甜宠言情等），把模板 id 传给 template 参数即可整套落盘，不必从零逐个建文件；模板与规范可任意组合（template=hotblood-xuanhuan 规范=webui）。用户工作区的 templates/ 目录可放自定义模板，优先于内置模板。
+3. 用户想在网页里管理工程、或同时打理多部小说时，用 novel_webui：action=启动服务 范围=工程 管理当前作品；范围=工作区 把当前目录当作多工程工作区，一个页面集中管理其下全部工程。启动后把服务地址告诉用户。md 文件仍是唯一事实源：网页、Obsidian、文件工具编辑的是同一批文件，用户在网页上做的修改你直接读文件即可看到，反之亦然。`,
     }));
 
     return () => { for (const d of disposers) d(); };
