@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小说工程</title>
+<style>
+:root {
+  --bg: #f6f2ea; --bg2: #fffdf8; --ink: #2c2620; --ink2: #6b6257; --line: #e4dccb;
+  --accent: #8a3324; --accent2: #a8542f; --ok: #2e6b46; --warn: #a05a1c; --bad: #9c2f2f;
+  --card: #fffdf8; --shadow: 0 1px 3px rgba(60, 46, 30, .08), 0 4px 14px rgba(60, 46, 30, .06);
+  --serif: Georgia, "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --sans: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--ink); font-size: 14.5px; }
+#app { display: flex; min-height: 100vh; }
+
+/* ── 侧栏 ── */
+#side { width: 208px; flex: none; background: var(--bg2); border-right: 1px solid var(--line); padding: 18px 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
+.brand { font-family: var(--serif); font-size: 19px; font-weight: 700; padding: 0 20px 14px; letter-spacing: .05em; }
+.brand small { display: block; font-family: var(--sans); font-size: 11px; color: var(--ink2); font-weight: 400; margin-top: 3px; }
+#projWrap { padding: 0 14px 12px; }
+#projWrap select { width: 100%; }
+nav { display: flex; flex-direction: column; padding: 4px 8px; gap: 2px; }
+nav a { padding: 8px 12px; border-radius: 8px; color: var(--ink2); text-decoration: none; cursor: pointer; font-size: 14px; }
+nav a:hover { background: rgba(138, 51, 36, .07); color: var(--ink); }
+nav a.on { background: rgba(138, 51, 36, .1); color: var(--accent); font-weight: 600; }
+#sideFoot { margin-top: auto; padding: 12px 20px 0; font-size: 11px; color: var(--ink2); border-top: 1px dashed var(--line); line-height: 1.7; }
+
+/* ── 主区 ── */
+#main { flex: 1; min-width: 0; padding: 26px 34px 60px; max-width: 1060px; }
+h1.vt { font-family: var(--serif); font-size: 24px; margin: 0 0 4px; }
+.sub { color: var(--ink2); font-size: 13px; margin-bottom: 22px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px; }
+.panel h2 { font-family: var(--serif); font-size: 16.5px; margin: 0 0 12px; }
+
+/* 统计块 */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; box-shadow: var(--shadow); }
+.stat b { display: block; font-size: 24px; font-family: var(--serif); }
+.stat span { font-size: 12px; color: var(--ink2); }
+
+/* 列表 */
+.rowlist { display: flex; flex-direction: column; }
+.rowitem { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px dashed var(--line); cursor: pointer; }
+.rowitem:last-child { border-bottom: 0; }
+.rowitem:hover { background: rgba(138, 51, 36, .04); }
+.rowitem .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowitem .meta { color: var(--ink2); font-size: 12px; flex: none; }
+.pill { display: inline-block; font-size: 11px; border-radius: 99px; padding: 1px 9px; background: rgba(138,51,36,.08); color: var(--accent); flex: none; }
+.pill.ok { background: rgba(46,107,70,.1); color: var(--ok); }
+.pill.bad { background: rgba(156,47,47,.1); color: var(--bad); }
+
+/* 卡片网格 */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; box-shadow: var(--shadow); transition: transform .12s; }
+.card:hover { transform: translateY(-2px); }
+.card b { font-family: var(--serif); font-size: 16px; display: block; margin-bottom: 5px; }
+.card p { margin: 0; color: var(--ink2); font-size: 12.5px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .meta { margin-top: 8px; font-size: 11px; color: var(--ink2); }
+
+/* 表单 */
+input[type=text], input[type=number], select, textarea {
+  font-family: inherit; font-size: 14px; color: var(--ink); background: #fff;
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent2); }
+textarea { width: 100%; resize: vertical; line-height: 1.7; }
+.btn { display: inline-block; background: var(--accent); border: 0; color: #fff; border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer; font-family: inherit; }
+.btn:hover { background: var(--accent2); }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px solid rgba(138,51,36,.4); }
+.btn.mini { padding: 3px 10px; font-size: 12px; }
+.btn.danger { background: transparent; color: var(--bad); border: 1px solid rgba(156,47,47,.4); }
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar input[type=text] { width: 220px; }
+.hidden { display: none !important; }
+
+/* 表格 */
+table.tb { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.tb th, table.tb td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.tb th { font-family: var(--serif); color: var(--accent); font-weight: 600; white-space: nowrap; }
+table.tb input { width: 100%; border-color: transparent; background: transparent; padding: 4px 6px; }
+table.tb tr:hover input { border-color: var(--line); background: #fff; }
+
+/* 正文阅读/编辑 */
+.prose { font-family: var(--serif); font-size: 16.5px; line-height: 2; max-width: 46em; white-space: pre-wrap; }
+.prose p { margin: 0 0 1em; }
+.md { line-height: 1.85; max-width: 52em; }
+.md h1, .md h2, .md h3 { font-family: var(--serif); margin: 1.2em 0 .5em; }
+.md h1 { font-size: 21px; } .md h2 { font-size: 18px; } .md h3 { font-size: 16px; }
+.md code { background: rgba(138,51,36,.07); border-radius: 4px; padding: 1px 5px; font-size: .9em; }
+.md blockquote { margin: .6em 0; padding: .2em 1em; border-left: 3px solid var(--line); color: var(--ink2); }
+.md .wiki { color: var(--accent); border-bottom: 1px dashed rgba(138,51,36,.5); }
+.md table { border-collapse: collapse; margin: .8em 0; font-size: 13.5px; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 10px; }
+.md th { background: rgba(138,51,36,.05); }
+.md hr { border: 0; border-top: 1px dashed var(--line); margin: 1.4em 0; }
+
+/* lint 报告 */
+.lintbox { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: 13px; line-height: 1.8; background: #fffbf4; }
+.lintbox .h { color: var(--bad); font-weight: 600; }
+.lintbox .s { color: var(--warn); }
+
+/* 工具箱 */
+.toolgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .toolgrid { grid-template-columns: 1fr; } }
+.result { background: #fffbf4; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 16px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-all; max-height: 420px; overflow: auto; }
+.bar { height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--accent2); }
+
+/* toast */
+#toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 9px 20px; border-radius: 99px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 99; max-width: 80vw; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.back { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+.editorbar { display: flex; gap: 10px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.tabs a { padding: 7px 16px; cursor: pointer; color: var(--ink2); border-radius: 8px 8px 0 0; font-size: 14px; }
+.tabs a.on { color: var(--accent); font-weight: 600; background: rgba(138,51,36,.07); }
+label.ck { font-size: 13px; color: var(--bad); display: flex; align-items: center; gap: 5px; }
+.empty { color: var(--ink2); text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">小说工程<small id="brandSub">WebUI 管理端</small></div>
+    <div id="projWrap" class="hidden"><select id="projSel"></select></div>
+    <nav id="nav">
+      <a data-v="dashboard">仪表盘</a>
+      <a data-v="cards-人物卡">人物卡</a>
+      <a data-v="cards-设定集">设定卡</a>
+      <a data-v="outline">大纲 · 剧情线</a>
+      <a data-v="chapters">章节</a>
+      <a data-v="trackers">伏笔 · 时间线</a>
+      <a data-v="tools">工具箱</a>
+    </nav>
+    <div id="sideFoot"></div>
+  </aside>
+  <main id="main"><div class="empty">加载中…</div></main>
+</div>
+<div id="toast"></div>
+<script>
+'use strict';
+// ---------------- 基础设施 ----------------
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtChars = (n) => n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n ?? 0);
+
+const S = {
+  project: localStorage.getItem('nw.project') || '',
+  view: 'dashboard',
+  cache: {},
+};
+
+function toast(msg, ms = 2200) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.body ? {} : {}) };
+  const token = localStorage.getItem('nw.token');
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const url = new URL(path, location.origin);
+  if (opts.query) for (const [k, v] of Object.entries(opts.query)) if (v !== undefined && v !== '') url.searchParams.set(k, v);
+  if (!S.project && url.searchParams.has('project') === false && opts.project !== false) { /* 单工程模式无需 project 参数 */ }
+  if (S.project && opts.project !== false) url.searchParams.set('project', S.project);
+  const init = { method: opts.method || 'GET', headers };
+  if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(opts.body); }
+  let res;
+  try { res = await fetch(url, init); } catch (e) { throw new Error('无法连接服务：' + e.message); }
+  if (res.status === 401) {
+    const t = prompt('此服务已启用访问令牌，请输入 token：');
+    if (t) { localStorage.setItem('nw.token', t); return api(path, opts); }
+    throw new Error('需要访问令牌');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || (res.status + ' 错误'));
+  return data;
+}
+
+// ---------------- 迷你 Markdown 渲染 ----------------
+function inline(s) {
+  return esc(s)
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '<span class="wiki" title="$1">$2</span>')
+    .replace(/\[\[([^\]]+)\]\]/g, '<span class="wiki">$1</span>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+function md2html(src) {
+  const lines = esc(src || '').split('\n');
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i += 1; continue; }
+    if (/^\s*[—-]{3,}\s*$/.test(line)) { out.push('<hr>'); i += 1; continue; }
+    if (/^&gt;\s?/.test(line)) { out.push(`<blockquote>${inline(line.replace(/^&gt;\s?/, ''))}</blockquote>`); i += 1; continue; }
+    if (line.trim().startsWith('|')) {
+      const block = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) { block.push(lines[i].trim()); i += 1; }
+      if (block.length >= 2) {
+        const cells = (l) => l.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const head = cells(block[0]);
+        const rows = block.slice(1).filter((l) => !/^\|[\s:|-]+\|?$/.test(l)).map(cells);
+        out.push('<table>' + '<tr>' + head.map((c) => `<th>${inline(c)}</th>`).join('') + '</tr>'
+          + rows.map((r) => '<tr>' + head.map((_, j) => `<td>${inline(r[j] ?? '')}</td>`).join('') + '</tr>').join('') + '</table>');
+        continue;
+      }
+    }
+    if (/^[-*]\s+/.test(line.trim()) || /^\d+[.、]\s+/.test(line.trim())) {
+      const items = [];
+      while (i < lines.length && (/^[-*]\s+/.test(lines[i].trim()) || /^\d+[.、]\s+/.test(lines[i].trim()))) {
+        items.push(lines[i].trim().replace(/^[-*]\s+|^\d+[.、]\s+/, '')); i += 1;
+      }
+      out.push('<ul>' + items.map((t) => `<li>${inline(t)}</li>`).join('') + '</ul>');
+      continue;
+    }
+    if (!line.trim()) { i += 1; continue; }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\||[-*]\s|\d+[.、]\s|&gt;)/.test(lines[i].trim())) { para.push(lines[i]); i += 1; }
+    out.push(`<p>${inline(para.join(' '))}</p>`);
+  }
+  return out.join('\n');
+}
+
+// ---------------- 视图 ----------------
+const VIEWS = {};
+
+function nav(v) {
+  S.view = v;
+  for (const a of $$('#nav a')) a.classList.toggle('on', a.dataset.v === v);
+  location.hash = '#/' + v;
+}
+
+function main_html(html) { $('#main').innerHTML = html; }
+
+async function render() {
+  const m = $('#main');
+  try {
+    m.innerHTML = '<div class="empty">加载中…</div>';
+    await (VIEWS[S.view] || VIEWS.dashboard)(m);
+  } catch (e) {
+    m.innerHTML = `<div class="panel"><h2>出错了</h2><p>${esc(e.message)}</p><p class="sub">服务可能已停止。回到 Agent 处用 novel_webui 重新启动，或手动运行 .webui/server.mjs。</p></div>`;
+  }
+}
+
+// ---- 仪表盘 ----
+VIEWS.dashboard = async (m) => {
+  const o = await api('/api/overview');
+  document.title = `${o.name} · 小说工程`;
+  const fs = o.stats;
+  const fbPct = fs.foreshadowTotal ? Math.round((fs.foreshadowTotal - fs.foreshadowOpen) / fs.foreshadowTotal * 100) : 0;
+  main_html(`
+    <h1 class="vt">${esc(o.name)}</h1>
+    <div class="sub">${esc(o.dir)} · 工程规范：${o.spec === 'webui' ? 'WebUI（md 唯一事实源 + 网页管理）' : 'Obsidian（纯 Markdown）'}</div>
+    <div class="stats">
+      <div class="stat"><b>${fs.chapters}</b><span>章节</span></div>
+      <div class="stat"><b>${fmtChars(fs.totalChars)}</b><span>总字数</span></div>
+      <div class="stat"><b>${fs.characters}</b><span>人物卡</span></div>
+      <div class="stat"><b>${fs.settings}</b><span>设定卡</span></div>
+      <div class="stat"><b>${fs.foreshadowOpen}<small style="font-size:13px;color:var(--ink2)">/${fs.foreshadowTotal}</small></b><span>伏笔未回收</span></div>
+    </div>
+    <div class="panel"><h2>最近章节</h2><div class="rowlist">${
+      o.recentChapters.length ? o.recentChapters.map((c) => `
+        <div class="rowitem" data-go="chapters" data-file="${esc(c.file)}">
+          <span class="pill">${c.num ?? '—'}</span><span class="t">${esc(c.title || c.name)}</span><span class="meta">${fmtChars(c.chars)} 字</span>
+        </div>`).join('') : '<div class="empty">还没有章节。到「章节」页写第一章，或让 Agent 走每章闭环。</div>'}
+    </div></div>
+    <div class="panel"><h2>伏笔回收进度</h2>
+      <div class="bar"><i style="width:${fbPct}%"></i></div>
+      <p class="sub" style="margin:8px 0 0">已回收 ${fs.foreshadowTotal - fs.foreshadowOpen} / ${fs.foreshadowTotal} 条（${fbPct}%）。${fs.foreshadowTotal ? '未回收的伏笔见「伏笔 · 时间线」。' : '伏笔清单还是空的。'}</p>
+    </div>
+    <div class="panel"><h2>最近归档</h2><div class="rowlist">${
+      o.recentArchives.length ? o.recentArchives.map((a) => `<div class="rowitem" style="cursor:default"><span class="t">${esc(a)}</span></div>`).join('') : '<div class="empty">暂无归档。</div>'}
+    </div></div>`);
+  $$('#main [data-go]').forEach((el) => el.addEventListener('click', () => { nav(el.dataset.go); render(); }));
+};
+
+// ---- 卡片（人物卡 / 设定集）----
+function cardView(type) {
+  return async (m) => {
+    const cards = await api('/api/cards', { query: { type } });
+    if (!cards.length) {
+      main_html(`
+        <h1 class="vt">${type === '人物卡' ? '人物卡' : '设定卡'}</h1>
+        <div class="sub">每人/每类一个 md 文件；条目之间用 [[双链]] 关联。</div>
+        <div class="panel"><div class="empty">还没有${type === '人物卡' ? '人物卡' : '设定卡'}。</div>
+        <div style="text-align:center;padding-bottom:14px"><button class="btn" id="newFirst">新建一张</button></div></div>`);
+      $('#newFirst').addEventListener('click', () => newCard(type));
+      return;
+    }
+    main_html(`
+      <h1 class="vt">${type === '人物卡' ? '人物卡' : '设定卡'}</h1>
+      <div class="sub">点击卡片查看与编辑；编辑直接写入工程 md 文件，Obsidian 与 Agent 立即可见。</div>
+      <div class="toolbar">
+        <input type="text" id="filter" placeholder="按名称/内容筛选…">
+        <button class="btn" id="newBtn">＋ 新建</button>
+      </div>
+      <div class="grid" id="grid">${cards.map((c) => `
+        <div class="card" data-file="${esc(c.file)}">
+          <b>${esc(c.title)}</b>
+          <p>${esc(c.snippet || '（空）')}</p>
+          <div class="meta">${c.sections.length ? esc(c.sections.slice(0, 3).join(' · ')) : ''}${c.sections.length > 3 ? ' …' : ''}</div>
+          <div class="meta">${fmtChars(c.chars)} 字</div>
+        </div>`).join('')}</div>`);
+    $('#newBtn').addEventListener('click', () => newCard(type));
+    $('#filter').addEventListener('input', () => {
+      const q = $('#filter').value.trim().toLowerCase();
+      $$('#grid .card').forEach((el) => {
+        el.style.display = !q || el.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+    $$('#grid .card').forEach((el) => el.addEventListener('click', () => cardEditor(type, el.dataset.file)));
+  };
+}
+VIEWS['cards-人物卡'] = cardView('人物卡');
+VIEWS['cards-设定集'] = cardView('设定集');
+
+async function newCard(type) {
+  const name = prompt(type === '人物卡' ? '角色名：' : '设定名（建议按类别命名，如「力量体系」）：');
+  if (!name || !name.trim()) return;
+  try {
+    await api('/api/card', { method: 'POST', body: { type, name: name.trim() } });
+    toast('已创建：' + name.trim());
+    render();
+  } catch (e) { toast(e.message, 3200); }
+}
+
+async function cardEditor(type, file) {
+  const { raw } = await api('/api/card', { query: { file } });
+  main_html(`
+    <a class="back">← 返回${type === '人物卡' ? '人物卡' : '设定卡'}</a>
+    <div class="panel">
+      <h2>${esc(file)}</h2>
+      <div class="tabs"><a data-t="preview" class="on">预览</a><a data-t="edit">编辑</a></div>
+      <div id="preview" class="md">${md2html(raw)}</div>
+      <div id="edit" class="hidden">
+        <textarea id="raw" rows="20">${esc(raw)}</textarea>
+        <div class="editorbar">
+          <button class="btn" id="save">保存（写入工程）</button>
+          <span id="count" class="sub" style="margin:0"></span>
+          <span style="flex:1"></span>
+          <button class="btn danger mini" id="del">删除此卡</button>
+        </div>
+      </div>
+    </div>`);
+  const upd = () => { $('#count').textContent = fmtChars($('#raw').value.replace(/\s+/g, '').length) + ' 字'; };
+  upd();
+  $('#raw').addEventListener('input', upd);
+  $$('.tabs a').forEach((a) => a.addEventListener('click', () => {
+    $$('.tabs a').forEach((x) => x.classList.toggle('on', x === a));
+    const edit = a.dataset.t === 'edit';
+    $('#preview').classList.toggle('hidden', edit);
+    $('#edit').classList.toggle('hidden', !edit);
+    if (!edit) $('#preview').innerHTML = md2html($('#raw').value);
+  }));
+  $('.back').addEventListener('click', () => { nav('cards-' + type); render(); });
+  $('#save').addEventListener('click', async () => {
+    try {
+      await api('/api/card', { method: 'PUT', body: { file, raw: $('#raw').value } });
+      toast('已保存到工程');
+    } catch (e) { toast(e.message, 3200); }
+  });
+  $('#del').addEventListener('click', async () => {
+    if (!confirm(`确定删除 ${file}？此操作不可撤销（建议先让 Agent 或 git 做备份）。`)) return;
+    try { await api('/api/card', { query: { file }, method: 'DELETE' }); toast('已删除'); nav('cards-' + type); render(); } catch (e) { toast(e.message, 3200); }
+  });
+  $('#raw').addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); $('#save').click(); } });
+}
+
+// ---- 大纲 · 剧情线 ----
+VIEWS.outline = async (m) => {
+  const files = await api('/api/outline');
+  const plot = files.find((f) => f.name === '剧情线');
+  main_html(`
+    <h1 class="vt">大纲 · 剧情线</h1>
+    <div class="sub">总纲与卷纲自由编辑；剧情线用表格管理（线名/类型/状态/关键节点），由工程文件 大纲/剧情线.md 承载。</div>
+    <div class="panel">
+      <h2>剧情线</h2>
+      ${plot ? '' : '<p class="sub">工程里还没有 大纲/剧情线.md，保存下方表格时会自动创建。</p>'}
+      <div id="plotbox"></div>
+    </div>
+    <div class="panel"><h2>大纲文件</h2><div class="rowlist">${
+      files.filter((f) => f.name !== '剧情线').map((f) => `
+        <div class="rowitem" data-file="${esc(f.file)}"><span class="t">${esc(f.title)}</span><span class="meta">${fmtChars(f.chars)} 字</span></div>`).join('') || '<div class="empty">大纲目录为空。</div>'}
+    </div></div>
+    <div id="outlineEditor"></div>`);
+  renderTableEditor($('#plotbox'), plot ? plot.file : '大纲/剧情线.md', ['线名', '类型', '状态', '起点', '终点', '关键节点'], !plot);
+  $$('#main .rowitem[data-file]').forEach((el) => el.addEventListener('click', async () => {
+    const file = el.dataset.file;
+    const { raw } = await api('/api/card', { query: { file } });
+    $('#outlineEditor').innerHTML = `
+      <div class="panel">
+        <h2>${esc(file)}</h2>
+        <textarea rows="16" id="oraw">${esc(raw)}</textarea>
+        <div class="editorbar"><button class="btn" id="osave">保存</button><span class="sub" style="margin:0">Ctrl+S 保存</span></div>
+      </div>`;
+    $('#osave').addEventListener('click', async () => {
+      try { await api('/api/card', { method: 'PUT', body: { file, raw: $('#oraw').value } }); toast('已保存'); } catch (e) { toast(e.message, 3200); }
+    });
+    $('#oraw').addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); $('#osave').click(); } });
+    $('#outlineEditor').scrollIntoView({ behavior: 'smooth' });
+  }));
+};
+
+// ---- 通用表格编辑器（伏笔清单 / 时间线 / 剧情线）----
+async function renderTableEditor(box, file, defaultHeader, createMissing) {
+  const data = await api('/api/table', { query: { file } });
+  let header = data.header.length ? data.header : defaultHeader;
+  let rows = data.rows.map((r) => header.map((_, i) => r[i] ?? ''));
+  if (!rows.length && createMissing !== true) rows = [header.map(() => '')];
+  const draw = () => {
+    box.innerHTML = `
+      <table class="tb"><thead><tr>${header.map((h) => `<th>${esc(h)}</th>`).join('')}<th style="width:34px"></th></tr></thead>
+      <tbody>${rows.map((r, ri) => `<tr>${r.map((c, ci) => `<td><input type="text" data-r="${ri}" data-c="${ci}" value="${esc(c)}"></td>`).join('')}
+        <td><button class="btn danger mini" data-del="${ri}">✕</button></td></tr>`).join('')}</tbody></table>
+      <div class="editorbar">
+        <button class="btn mini ghost" id="addRow">＋ 加一行</button>
+        <button class="btn" id="saveTable">保存到工程</button>
+        <span class="sub" style="margin:0">写入 ${esc(file)}</span>
+      </div>`;
+    box.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t.dataset.r !== undefined) rows[+t.dataset.r][+t.dataset.c] = t.value;
+    });
+    $('#addRow', box).addEventListener('click', () => { rows.push(header.map(() => '')); draw(); });
+    $$('button[data-del]', box).forEach((b) => b.addEventListener('click', () => { rows.splice(+b.dataset.del, 1); draw(); }));
+    $('#saveTable', box).addEventListener('click', async () => {
+      try {
+        await api('/api/table', { method: 'PUT', body: { file, header, rows: rows.filter((r) => r.some((c) => c.trim())) } });
+        toast('已保存到 ' + file);
+      } catch (e) { toast(e.message, 3600); }
+    });
+  };
+  draw();
+}
+
+// ---- 伏笔 · 时间线 ----
+VIEWS.trackers = async (m) => {
+  main_html(`
+    <h1 class="vt">伏笔 · 时间线</h1>
+    <div class="sub">两张追踪表是每章闭环的一部分；Agent 归档时会自动更新，这里可人工增改。表头结构不要改（Agent 与工具按列读取）。</div>
+    <div class="panel"><h2>伏笔清单</h2><div id="tb1"></div></div>
+    <div class="panel"><h2>时间线</h2><div id="tb2"></div></div>`);
+  await renderTableEditor($('#tb1'), '伏笔清单.md', ['伏笔', '铺设位置', '发酵', '回收位置', '状态']);
+  await renderTableEditor($('#tb2'), '时间线.md', ['时间', '事件', '参与人物', '影响/后续']);
+};
+
+// ---- 章节 ----
+VIEWS.chapters = async (m) => {
+  const list = await api('/api/chapters');
+  const nextNum = list.length ? Math.max(...list.map((c) => c.num || 0)) + 1 : 1;
+  main_html(`
+    <h1 class="vt">章节</h1>
+    <div class="sub">正文/ 目录，每章一个文件（第NNN章-标题.md）。保存时执行与 Agent 相同的质量门禁；硬违规需修复或勾选强制。</div>
+    <div class="panel"><h2>新建章节</h2>
+      <div class="toolbar">
+        <input type="number" id="cnum" value="${nextNum}" min="1" style="width:84px" title="章节序号">
+        <input type="text" id="ctitle" placeholder="章节标题" style="width:200px">
+        <span class="sub" style="margin:0" id="cstat"></span>
+      </div>
+      <textarea id="craw" rows="8" placeholder="粘贴或撰写本章正文（纯文本）…"></textarea>
+      <div class="editorbar">
+        <button class="btn" id="ccheck">先查 AI 味</button>
+        <button class="btn" id="csave">保存章节</button>
+        <label class="ck hidden" id="cforceWrap"><input type="checkbox" id="cforce">强制保存（保留硬违规）</label>
+      </div>
+      <div id="clint"></div>
+    </div>
+    <div class="panel"><h2>全部章节（${list.length}）</h2><div class="rowlist">${
+      list.slice().reverse().map((c) => `
+        <div class="rowitem" data-file="${esc(c.file)}">
+          <span class="pill">${c.num ?? '—'}</span>
+          <span class="t">${esc(c.title || c.name)}</span>
+          <span class="meta">${fmtChars(c.chars)} 字</span>
+          ${c.chars && c.chars < 800 ? '<span class="pill bad">偏短</span>' : ''}
+        </div>`).join('') || '<div class="empty">还没有章节。</div>'}
+    </div></div>
+    <div id="reader"></div>`);
+  const upd = () => { $('#cstat').textContent = $('#craw').value ? fmtChars($('#craw').value.replace(/\s+/g, '').length) + ' 字' : ''; };
+  $('#craw').addEventListener('input', upd);
+  const showLint = (r, box) => {
+    $(box).innerHTML = `<div class="lintbox"><b>门禁报告</b>（${r.chars} 字）：${r.hardCount ? `<span class="h">${r.hardCount} 项硬违规</span>` : '<span style="color:var(--ok)">硬违规清零</span>'}${r.softCount ? `，${r.softCount} 项建议核对` : ''}
+      ${r.report ? '\n' + esc(r.report).replace(/【必须修】/g, '<span class="h">【必须修】</span>').replace(/【建议查】/g, '<span class="s">【建议查】</span>').replace(/\n/g, '<br>') : ''}</div>`;
+  };
+  $('#ccheck').addEventListener('click', async () => {
+    if (!$('#craw').value.trim()) return toast('先粘贴正文');
+    try { showLint(await api('/api/tool/lint', { method: 'POST', body: { text: $('#craw').value } }), '#clint'); } catch (e) { toast(e.message, 3200); }
+  });
+  $('#csave').addEventListener('click', async () => {
+    if (!$('#craw').value.trim()) return toast('正文为空');
+    try {
+      const r = await api('/api/chapter', { method: 'POST', body: { num: +$('#cnum').value, title: $('#ctitle').value, raw: $('#craw').value, force: $('#cforce').checked } });
+      showLint(r, '#clint');
+      $('#cforceWrap').classList.toggle('hidden', !r.hardCount);
+      toast('已保存：' + r.file);
+      setTimeout(render, 600);
+    } catch (e) {
+      const m = String(e.message);
+      if (m.includes('硬违规')) {
+        $('#clint').innerHTML = `<div class="lintbox"><b>保存被门禁拦截</b><br>${esc(m.slice(m.indexOf('：') + 1)).replace(/\n/g, '<br>')}</div>`;
+        $('#cforceWrap').classList.remove('hidden');
+      } else toast(m, 3600);
+    }
+  });
+  $$('.rowitem[data-file]').forEach((el) => el.addEventListener('click', () => chapterReader(el.dataset.file)));
+};
+
+async function chapterReader(file) {
+  const { raw } = await api('/api/chapter', { query: { file } });
+  const paras = raw.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  $('#reader').innerHTML = `
+    <div class="panel">
+      <h2>${esc(file)} <button class="btn mini ghost" id="editCh">编辑</button></h2>
+      <div class="prose">${paras.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
+      <div id="chEdit" class="hidden">
+        <textarea rows="18" id="chRaw">${esc(raw)}</textarea>
+        <div class="editorbar">
+          <button class="btn" id="chSave">保存</button>
+          <label class="ck hidden" id="chForceWrap"><input type="checkbox" id="chForce">强制保存</label>
+          <span class="sub" style="margin:0">修改已有章节同样执行质量门禁</span>
+        </div>
+        <div id="chLint"></div>
+      </div>
+    </div>`;
+  $('#editCh').addEventListener('click', () => { $('#chEdit').classList.toggle('hidden'); });
+  $('#chSave').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/chapter', { method: 'PUT', body: { file, raw: $('#chRaw').value, force: $('#chForce').checked } });
+      $('#chLint').innerHTML = `<div class="lintbox">${r.hardCount ? `<span class="h">仍余 ${r.hardCount} 项硬违规（已强制写入）</span>` : '<span style="color:var(--ok)">已保存，硬违规清零</span>'}</div>`;
+      toast('已保存');
+    } catch (e) {
+      const msg = String(e.message);
+      if (msg.includes('硬违规')) {
+        $('#chLint').innerHTML = `<div class="lintbox"><b>保存被门禁拦截</b><br>${esc(msg).replace(/\n/g, '<br>')}</div>`;
+        $('#chForceWrap').classList.remove('hidden');
+      } else toast(msg, 3600);
+    }
+  });
+  $('#reader').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ---- 工具箱 ----
+VIEWS.tools = async (m) => {
+  main_html(`
+    <h1 class="vt">工具箱</h1>
+    <div class="sub">纯代码工具，与 Agent 侧 novel_lint / novel_import 同一套规则。</div>
+    <div class="toolgrid">
+      <div class="panel"><h2>AI 味检查</h2>
+        <textarea id="lintIn" rows="10" placeholder="粘贴正文片段…"></textarea>
+        <div class="editorbar"><button class="btn" id="lintGo">检查</button><span id="lintStat" class="sub" style="margin:0"></span></div>
+        <div id="lintOut"></div>
+      </div>
+      <div class="panel"><h2>全文搜索</h2>
+        <div class="toolbar"><input type="text" id="sq" placeholder="搜索词…"><button class="btn" id="sgo">搜索</button></div>
+        <div id="sout" class="result hidden"></div>
+      </div>
+      <div class="panel"><h2>旧稿分章</h2>
+        <p class="sub" style="margin-top:0">按「第X章」标记拆分，预览后逐章落盘（含门禁预检）。</p>
+        <textarea id="splitIn" rows="8" placeholder="粘贴旧稿全文…"></textarea>
+        <div class="editorbar">起始章号 <input type="number" id="splitStart" value="1" min="1" style="width:76px"><button class="btn" id="splitGo">拆分预览</button></div>
+        <div id="splitOut"></div>
+      </div>
+      <div class="panel"><h2>说明</h2>
+        <div class="md">
+          <ul>
+            <li>所有编辑直接写入工程 md 文件——<b>md 是唯一事实源</b>，Obsidian、Agent、本页面看到的是同一份数据。</li>
+            <li>章节保存门禁与 Agent 侧 novel_lint 同源：硬违规清零才允许落盘（可强制豁免）。</li>
+            <li>更多创作能力（写正文、改大纲、拆书评阅）请回到 Agent 会话完成。</li>
+          </ul>
+        </div>
+      </div>
+    </div>`);
+  $('#lintGo').addEventListener('click', async () => {
+    if (!$('#lintIn').value.trim()) return;
+    try {
+      const r = await api('/api/tool/lint', { method: 'POST', body: { text: $('#lintIn').value } });
+      $('#lintStat').textContent = `${r.chars} 字 · 硬违规 ${r.hardCount} · 建议核对 ${r.softCount}`;
+      $('#lintOut').innerHTML = `<div class="result">${esc(r.report).replace(/【必须修】/g, '<span class="h" style="color:var(--bad)">【必须修】</span>').replace(/【建议查】/g, '<span style="color:var(--warn)">【建议查】</span>')}</div>`;
+    } catch (e) { toast(e.message, 3200); }
+  });
+  const doSearch = async () => {
+    const q = $('#sq').value.trim();
+    if (!q) return;
+    try {
+      const hits = await api('/api/search', { query: { q } });
+      $('#sout').classList.remove('hidden');
+      $('#sout').textContent = hits.length
+        ? hits.map((h) => `${h.file}:${h.line}  ${h.text}`).join('\n')
+        : '（无结果）';
+    } catch (e) { toast(e.message, 3200); }
+  };
+  $('#sgo').addEventListener('click', doSearch);
+  $('#sq').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+  $('#splitGo').addEventListener('click', async () => {
+    if (!$('#splitIn').value.trim()) return;
+    try {
+      const chapters = await api('/api/tool/split', { method: 'POST', body: { text: $('#splitIn').value, start: +$('#splitStart').value } });
+      $('#splitOut').innerHTML = chapters.length ? `
+        <div class="result">${esc(chapters.map((c) => `第${c.num}章 ${c.title || '（无标题）'} — ${c.chars} 字${c.hardCount ? ` · 硬违规 ${c.hardCount}` : ' · 门禁通过'}`).join('\n'))}</div>
+        <div class="editorbar"><button class="btn" id="splitSave">全部落盘到 正文/</button><span class="sub" style="margin:0">有硬违规的章节将按原样写入（导入旧稿不强制修文）</span></div>`
+        : '<div class="result">未能识别出「第X章」标记。</div>';
+      const saveBtn = $('#splitSave');
+      if (saveBtn) saveBtn.addEventListener('click', async () => {
+        let saved = 0;
+        for (const c of chapters) {
+          try {
+            await api('/api/chapter', { method: 'POST', body: { num: c.num, title: c.title, raw: c.body || `（原稿 ${c.title}）`, force: true } });
+            saved += 1;
+          } catch (e) { toast(`第${c.num}章落盘失败：${e.message}`, 3600); break; }
+        }
+        toast(`已落盘 ${saved} 章`);
+        if (saved) setTimeout(render, 500);
+      });
+    } catch (e) { toast(e.message, 3200); }
+  });
+};
+
+// ---------------- 启动 ----------------
+async function boot() {
+  try {
+    const st = await api('/api/state', { project: false });
+    $('#brandSub').textContent = st.mode === 'workspace' ? `工作区 · ${st.projects.length} 个工程` : '单工程管理';
+    $('#sideFoot').innerHTML = `规范：md 唯一事实源<br>服务 v${esc(st.version)} · 数据即文件`;
+    if (st.mode === 'workspace' && st.projects.length) {
+      $('#projWrap').classList.remove('hidden');
+      const sel = $('#projSel');
+      sel.innerHTML = st.projects.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+      if (!st.projects.some((p) => p.id === S.project)) S.project = st.projects[0].id;
+      sel.value = S.project;
+      sel.addEventListener('change', () => { S.project = sel.value; localStorage.setItem('nw.project', S.project); render(); });
+    } else S.project = '';
+    if (st.mode === 'workspace' && !st.projects.length) {
+      main_html('<div class="panel empty">工作区下没有发现小说工程。<br><br>识别条件：子目录含 README.md，且含 大纲/ 人物卡/ 设定集/ 正文/ 任一目录。<br>可先用 Agent 的 novel_project 初始化工程。</div>');
+      return;
+    }
+  } catch (e) {
+    main_html(`<div class="panel"><h2>无法连接服务</h2><p>${esc(e.message)}</p></div>`);
+    return;
+  }
+  const v = (location.hash.match(/^#\/(.+)$/) || [])[1];
+  for (const a of $$('#nav a')) {
+    a.addEventListener('click', () => { nav(a.dataset.v); render(); });
+  }
+  nav(v || 'dashboard');
+  render();
+}
+boot();
+</script>
+</body>
+</html>

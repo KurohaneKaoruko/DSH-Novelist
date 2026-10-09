@@ -1,0 +1,6 @@
+# 模板清单（编写规范见 templates/README.md）
+id: blank
+name: 空白工程
+spec: obsidian
+tags: 通用
+description: 标准 Markdown 工程骨架：正文/大纲/设定集/人物卡/归档 + 伏笔清单、时间线、文风卡、剧情线，全部为待填占位
