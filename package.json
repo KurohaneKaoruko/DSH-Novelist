@@ -24,6 +24,8 @@
     "agent.cordis.yml",
     "preset.yml",
     "plugins",
-    "skills"
+    "skills",
+    "templates",
+    "webui"
   ]
 }

@@ -6,8 +6,9 @@
 //   1. profiles/novel：写作 profile（bundles = dsh-base + dsh-acp-app，挂
 //      agent-presets roster，default 指向 novelist）；
 //   2. .agent-presets/novelist：安装仓库内的「小说助手」预设（preset.yml、
-//      agent.cordis.yml、plugins/、skills/ 四样，tools/ 等开发件不随行）——
-//      只覆盖「本工具安装且未被用户修改」的副本；用户改过或外来预设一律跳过。
+//      agent.cordis.yml、plugins/、skills/、templates/、webui/ 六样，tools/
+//      等开发件不随行）——只覆盖「本工具安装且未被用户修改」的副本；
+//      用户改过或外来预设一律跳过。
 //
 // 用法：node provision-home.mjs --home <dir> [--force]
 // 导出：provisionHome(home, opts) → 计数对象
@@ -21,7 +22,7 @@ const toolsDir = path.resolve(url.fileURLToPath(new URL(".", import.meta.url)));
 const presetRoot = path.resolve(toolsDir, "..");
 const STAMP_NAME = ".novelist-verify.json";
 const PRESET_KEY = "novelist";
-const PRESET_ITEMS = ["preset.yml", "agent.cordis.yml", "plugins", "skills"];
+const PRESET_ITEMS = ["preset.yml", "agent.cordis.yml", "plugins", "skills", "templates", "webui"];
 
 function sha256buf(buf) {
   return crypto.createHash("sha256").update(buf).digest("hex");

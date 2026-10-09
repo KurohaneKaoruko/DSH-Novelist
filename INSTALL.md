@@ -26,7 +26,7 @@
    - **CLI**：`dsh plugin --profile <profile名> add <仓库目录>`（工具会自己完成包安装与 bundle 选择，不要手工改 profile 的 package.json 复刻这些步骤）。
 3. 挂载校验：`plugin_manager` 的 `list_bundles` 应列出 `dsh-novelist`；`list_plugins` 应有 `preset-novelist` 行且无激活诊断。roster（预设选择器）应出现「**小说助手**」。
 4. 新建会话选择「小说助手」，确认：
-   - 工具列表包含 `novel_lint` / `novel_check` / `novel_briefing` / `novel_archive` / `novel_project` / `novel_import` / `novel_scan_book`；
+   - 工具列表包含 `novel_lint` / `novel_check` / `novel_briefing` / `novel_archive` / `novel_project` / `novel_import` / `novel_scan_book` / `novel_webui`；
    - 技能列表包含 13 个 `novel-*` skill（7 个方法论 + 6 个 novel-style-* 风格，风格按作品归属加载）；
    - 系统提示包含「小说助手」人设与工作法路由段。
 
@@ -34,8 +34,9 @@
 
 ## 路线 B：目录复制（DSH ≤ 0.1.6）
 
-1. 把仓库根目录的全部内容（`preset.yml`、`agent.cordis.yml`、`plugins/`、`skills/`）复制到 `$HOME/.dsh/.agent-presets/novelist/`（Windows 即 `C:\Users\<用户名>\.dsh\.agent-presets\novelist\`；可用 `echo $env:DSH_HOME` 确认根目录）。
+1. 把仓库根目录的全部内容（`preset.yml`、`agent.cordis.yml`、`plugins/`、`skills/`、`templates/`、`webui/` 六样）复制到 `$HOME/.dsh/.agent-presets/novelist/`（Windows 即 `C:\Users\<用户名>\.dsh\.agent-presets\novelist\`；可用 `echo $env:DSH_HOME` 确认根目录）。
    - 本仓库以 submodule 引用 `skills/`（独立仓库 Novelist-Skills）：git 克隆请带 `--recurse-submodules`，否则 `skills/` 为空目录。
+   - `templates/`（工程模板）与 `webui/`（WebUI 服务资产）必须随行：插件初始化 webui 规范工程、拉取工程模板时从安装位读取它们；缺失时工程初始化会回退到内置骨架，但模板与 WebUI 功能不可用。
    - 该目录在会话工作区之外：若文件写入被沙箱拒绝，用 sandbox_permissions 重试一次（需用户批准）。
 2. 挂载校验：通过临时插件注入 `agentPresets` 服务并调用 `agentPresets.standingKeyFor('novelist')`；正常返回即校验通过。
 3. 收尾同路线 A 第 4 步（预设选择器选「小说助手」并核对工具/技能/人设）。
@@ -51,6 +52,8 @@
 
 - **预设选择器里没有「小说助手」？**
   - 路线 A：确认 `list_bundles` 列出了 `dsh-novelist`、`list_plugins` 的 `preset-novelist` 行无激活诊断；安装时目标必须是**包含 package.json 的仓库根目录**，而不是其中的某个子目录。
-  - 路线 B：确认已完整复制（`skills/` 子目录必须随行），且挂载校验通过；预设清单即时扫描，无需重启。
+  - 路线 B：确认已完整复制（`skills/`、`templates/`、`webui/` 必须随行），且挂载校验通过；预设清单即时扫描，无需重启。
 - **想改方法论？** 编辑 `skills/*/SKILL.md`（独立仓库 Novelist-Skills，以 submodule 挂载于 `skills/`）：路线 B 直接覆盖安装副本；路线 A 改后重装 bundle（或在仓库目录内 `git pull` 后按管理器的更新入口重装）。
 - **DSH 升到 0.1.7+ 后预设消失了？** 这是预期行为：目录式预设在该区间被废弃。改走路线 A 重装一次即可。
+- **网页管理端打不开？** 确认服务已启动（`novel_webui action=服务状态`，或看工程 `.webui/state.json` 与 `server.log`）；服务只监听 127.0.0.1，浏览器要在同一台机器上访问；启用了 token 时（`.webui/config.json`）页面会提示输入。
+- **旧版本升级后工程模板/WebUI 不可用？** 路线 B 重新完整复制（旧指引只复制四样，缺 `templates/` 与 `webui/`）；路线 A 重装 bundle。

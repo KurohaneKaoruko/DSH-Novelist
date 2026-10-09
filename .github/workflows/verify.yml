@@ -46,3 +46,18 @@ jobs:
         run: npm run kernel:install:bundle
       - name: bundle 路线冒烟（roster/诊断/skills 硬断言）
         run: npm run verify:bundle
+
+  # WebUI 服务 + 工程模板冒烟：纯 node 标准库，不需要 dsh 内核与子模块。
+  verify-webui:
+    name: WebUI 服务与工程模板冒烟
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: WebUI 服务 + 工程模板冒烟
+        run: npm run verify:webui
