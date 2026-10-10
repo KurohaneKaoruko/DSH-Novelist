@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 小说工程 WebUI 服务——零依赖轻量 Web 管理端（只使用 Node 内建模块，Node ≥ 18）。
+// 作品工程 WebUI 服务——零依赖轻量 Web 管理端（只使用 Node 内建模块，Node ≥ 18）。
 // -----------------------------------------------------------------------------
 // 三种启动方式（等价）：
 //   1. Agent 工具：novel_webui action=启动服务（推荐，自动安装/升级 .webui/ 并后台拉起）
@@ -65,7 +65,7 @@ function fail(message, status = 400) {
 
 const ALLOWED_TOPS = ['大纲', '人物卡', '设定集', '正文', '归档'];
 
-// 是否长得像一个小说工程（初始化工程的目录约定）
+// 是否长得像一个作品工程（初始化工程的目录约定）
 function looksLikeProject(dir) {
   try {
     if (!fsSync.statSync(path.join(dir, 'README.md')).isFile()) return false;
@@ -77,7 +77,7 @@ function looksLikeProject(dir) {
   return false;
 }
 
-// 发现工作区下的小说工程（深度 1；隐藏目录跳过）
+// 发现工作区下的作品工程（深度 1；隐藏目录跳过）
 function discoverProjects(workspace) {
   const out = [];
   let entries;
@@ -555,7 +555,7 @@ async function main() {
     ? discoverProjects(root)
     : [{ id: 'default', name: path.basename(root), dir: root }];
   if (mode === 'workspace' && !found.length) {
-    console.error(`[webui] 工作区 ${root} 下没有发现小说工程（识别条件：含 README.md 且含 大纲/人物卡/设定集/正文 任一目录）。`);
+    console.error(`[webui] 工作区 ${root} 下没有发现作品工程（识别条件：含 README.md 且含 大纲/人物卡/设定集/正文 任一目录）。`);
   }
   const projectsOpened = found.map((p) => openProject(p));
 
@@ -621,7 +621,7 @@ async function main() {
   }, null, 2)}\n`, 'utf8');
 
   const banner = [
-    `[webui] 小说工程 WebUI 服务 v${VERSION}`,
+    `[webui] 作品工程 WebUI 服务 v${VERSION}`,
     `[webui] 模式：${mode === 'workspace' ? `工作区（${projectsOpened.length} 个工程）` : '单工程'} · 根目录：${root}`,
     `[webui] 地址：http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}/`,
     token ? '[webui] 访问令牌：已启用（请求需带 Authorization: Bearer <token>）' : '[webui] 访问令牌：未启用（仅本机回环监听）',

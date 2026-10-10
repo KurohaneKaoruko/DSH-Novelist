@@ -40,18 +40,18 @@
 | novel_project | 工程操作：查询/拉取工程模板、按规范（obsidian/webui）初始化、保存章节（内置质量门禁）、进度统计、整理索引 |
 | novel_import | 旧稿分章导入 |
 | novel_scan_book | 全书体检材料组装 |
-| novel_webui | WebUI 服务管理：安装/启动/停止小说工程的网页管理端，支持单工程与多工程工作区 |
+| novel_webui | WebUI 服务管理：安装/启动/停止作品工程的网页管理端，支持单工程与多工程工作区 |
 
 ## 工程规范
 
-创建小说工程时先选**工程规范**（`novel_project action=初始化工程 规范=…`）：
+创建作品工程时先选**工程规范**（`novel_project action=初始化工程 规范=…`）：
 
 | | obsidian（默认） | webui |
 | --- | --- | --- |
 | 内容数据 | 纯 Markdown | 纯 Markdown（与 obsidian 完全一致） |
 | 额外文件 | 无 | `.webui/` 隐藏目录（Obsidian 不显示） |
 | 编辑方式 | Obsidian / Agent / 文本编辑器 | 上述全部 + 浏览器网页 |
-| 多工程管理 | 逐个打开 | 工作区模式，一个页面集中管理所有小说工程 |
+| 多工程管理 | 逐个打开 | 工作区模式，一个页面集中管理所有作品工程 |
 
 两种规范共享同一批 md 文件（**md 是唯一事实源**），随时互转：obsidian 工程 `novel_webui action=安装服务` 原地升级为 webui；删掉 `.webui/` 即回到纯 obsidian。详见 [webui/README.md](webui/README.md)。
 
@@ -69,7 +69,7 @@ webui 规范的网页管理端（零 npm 依赖，默认只监听 127.0.0.1）�
 | romance-sweet | 甜宠言情：核心 CP 总纲、感情线节点表（糖点节奏）、双主角人物卡（语言指纹） |
 
 - 查询：`novel_project action=查询模板`；使用：`novel_project action=初始化工程 title=书名 template=hotblood-xuanhuan 规范=webui`
-- 模板与规范可任意组合；在小说工程的公共父目录放 `templates/<id>/` 即为工作区自定义模板（优先于内置）。编写规范见 [templates/README.md](templates/README.md)。
+- 模板与规范可任意组合；在作品工程的公共父目录放 `templates/<id>/` 即为工作区自定义模板（优先于内置）。编写规范见 [templates/README.md](templates/README.md)。
 
 ## 安装
 

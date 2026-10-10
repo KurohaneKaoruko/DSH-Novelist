@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>小说工程</title>
+<title>作品工程</title>
 <style>
 :root {
   --bg: #f6f2ea; --bg2: #fffdf8; --ink: #2c2620; --ink2: #6b6257; --line: #e4dccb;
@@ -126,7 +126,7 @@ label.ck { font-size: 13px; color: var(--bad); display: flex; align-items: cente
 <body>
 <div id="app">
   <aside id="side">
-    <div class="brand">小说工程<small id="brandSub">WebUI 管理端</small></div>
+    <div class="brand">作品工程<small id="brandSub">WebUI 管理端</small></div>
     <div id="projWrap" class="hidden"><select id="projSel"></select></div>
     <nav id="nav">
       <a data-v="dashboard">仪表盘</a>
@@ -256,7 +256,7 @@ async function render() {
 // ---- 仪表盘 ----
 VIEWS.dashboard = async (m) => {
   const o = await api('/api/overview');
-  document.title = `${o.name} · 小说工程`;
+  document.title = `${o.name} · 作品工程`;
   const fs = o.stats;
   const fbPct = fs.foreshadowTotal ? Math.round((fs.foreshadowTotal - fs.foreshadowOpen) / fs.foreshadowTotal * 100) : 0;
   main_html(`
@@ -640,7 +640,7 @@ async function boot() {
       sel.addEventListener('change', () => { S.project = sel.value; localStorage.setItem('nw.project', S.project); render(); });
     } else S.project = '';
     if (st.mode === 'workspace' && !st.projects.length) {
-      main_html('<div class="panel empty">工作区下没有发现小说工程。<br><br>识别条件：子目录含 README.md，且含 大纲/ 人物卡/ 设定集/ 正文/ 任一目录。<br>可先用 Agent 的 novel_project 初始化工程。</div>');
+      main_html('<div class="panel empty">工作区下没有发现作品工程。<br><br>识别条件：子目录含 README.md，且含 大纲/ 人物卡/ 设定集/ 正文/ 任一目录。<br>可先用 Agent 的 novel_project 初始化工程。</div>');
       return;
     }
   } catch (e) {
