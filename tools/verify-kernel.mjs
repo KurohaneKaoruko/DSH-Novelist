@@ -153,8 +153,9 @@ try {
   const skillsLine = probeLines.find((l) => l.startsWith("SKILLS "));
   const skillNames = skillsLine ? JSON.parse(skillsLine.slice("SKILLS ".length)) : [];
   const expectedSkills = [
-    "novel-ai-lexicon", "novel-analysis", "novel-continuity", "novel-craft", "novel-plotting",
-    "novel-project", "novel-prose-standards",
+    "novel-ai-lexicon", "novel-ai-structure", "novel-analysis", "novel-chapter-plan", "novel-continuity",
+    "novel-craft", "novel-human-touch", "novel-plotting", "novel-profiles", "novel-project",
+    "novel-prose-standards", "novel-revision",
     "novel-style-hotblood", "novel-style-lightnovel", "novel-style-mystery",
     "novel-style-romance", "novel-style-scifi", "novel-style-xianxia",
   ];
