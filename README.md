@@ -4,30 +4,7 @@
 
 ## 包含内容
 
-> 13 个 skill 的本体在独立仓库 [Novelist-Skills](https://github.com/KurohaneKaoruko/Novelist-Skills)（跨项目通用，不绑死本仓库），以 submodule 形式挂载于本仓库 `skills/` 目录。克隆本仓库请带 `--recurse-submodules`。
-
-**13 个 skill（按需加载）**
-
-| skill | 用途 |
-| --- | --- |
-| novel-prose-standards | 正文铁律、直出即净生成时干预、润色/改写/翻译流程 |
-| novel-ai-lexicon | AI 味分级特征库：约 260 条词库与句式，含第二代 AI 特征（伪外化、数字装具体、对话标签、段尾总结等结构层）与防误伤白名单 |
-| novel-continuity | 写前必查清单、前文衔接三锚点、归档回填、剧情漏洞排查 |
-| novel-plotting | 总纲/卷纲/细纲/章节规划/情节推演/书名简介包装 |
-| novel-craft | 场景三拍、对话技法、打脸四拍、情绪曲线、角色设计与采访 |
-| novel-analysis | 分析/拆书/评阅（六维评分）/模拟读者团/合规体检/起名 |
-| novel-project | 工程目录约定、人物卡/设定集/文风卡模板、归档三件套、Obsidian 工作流 |
-
-**6 个风格 skill（按作品风格加载，写什么风格就加载哪个）**
-
-| skill | 用途 |
-| --- | --- |
-| novel-style-hotblood | 男频热血爽文：爽点密度与升级链、期待感管理、打脸写法、金手指规则、节奏铁律 |
-| novel-style-romance | 女频甜宠言情：心动写法、糖点节奏、双视角与信息差、误会分寸、情话对话、日常质感 |
-| novel-style-mystery | 悬疑/诡秘/克苏鲁风：谜面先行、线索公平性、恐怖写法、规矩与代价、多层反转、张力控制 |
-| novel-style-xianxia | 古风仙侠/武侠：古风语感、体系自洽、打斗意境、江湖质感、山川风物、称谓礼制 |
-| novel-style-scifi | 科幻/末世：设定推演、细节颗粒度、末世压力、人性抉择、科学克制、冷静叙述腔 |
-| novel-style-lightnovel | 轻小说/二次元风：轻快语感、角色声线、萌点写法、梗的分寸、日常主线配比 |
+> skills 本体在独立仓库 [Novelist-Skills](https://github.com/KurohaneKaoruko/Novelist-Skills)（跨项目通用，不绑死本仓库），以 submodule 形式挂载于本仓库 `skills/` 目录：12 个方法论 skill 按需加载，6 个文风 skill 按作品风格加载。各 skill 的清单与职责见 [Novelist-Skills README](https://github.com/KurohaneKaoruko/Novelist-Skills#readme)。克隆本仓库请带 `--recurse-submodules`。
 
 **1 个插件（8 个工具，纯代码实现，无模型调用）**
 
@@ -55,7 +32,7 @@
 
 两种规范共享同一批 md 文件（**md 是唯一事实源**），随时互转：obsidian 工程 `novel_webui action=安装服务` 原地升级为 webui；删掉 `.webui/` 即回到纯 obsidian。详见 [webui/README.md](webui/README.md)。
 
-webui 规范的网页管理端（零 npm 依赖，默认只监听 127.0.0.1）提供：人物卡/设定卡管理（新建内置《novel-project》格式脚手架）、大纲与剧情线表格编辑、章节阅读与保存（执行与 Agent 相同的质量门禁）、伏笔/时间线表格编辑、AI 味检查（与 novel_lint 同源规则）、全文搜索、旧稿分章、字数统计。
+webui 规范的网页管理端（零 npm 依赖，默认只监听 127.0.0.1）提供：人物卡/设定卡管理（新建内置《novel-profiles》格式脚手架）、大纲与剧情线表格编辑、章节阅读与保存（执行与 Agent 相同的质量门禁）、伏笔/时间线表格编辑、AI 味检查（与 novel_lint 同源规则）、全文搜索、旧稿分章、字数统计。
 
 ## 工程模板
 
