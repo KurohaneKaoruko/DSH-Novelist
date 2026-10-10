@@ -12,7 +12,7 @@
 //   1. ROSTER 含 novelist 且无 broken；
 //   2. novelist 的 diagnostic 为空（行级 schema 与 import 全部通过）；
 //   3. presets.mount() 能把预设挂进一个新建 scope（bind 真实发生）；
-//   4. 挂载后的 scoped skills 注册表能发现随包分发的 13 个 novel-* skill。
+//   4. 挂载后的 scoped skills 注册表能发现随包分发的 18 个 novel-* skill。
 // 注意：ACP 层自身不接预设（web/desktop 的 api-session-controller 才是挂载方），
 // 因此「session/new 成功」不构成证据，一切以探针读到的 registry 状态为准。
 //

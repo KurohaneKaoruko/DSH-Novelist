@@ -27,7 +27,7 @@
 3. 挂载校验：`plugin_manager` 的 `list_bundles` 应列出 `dsh-novelist`；`list_plugins` 应有 `preset-novelist` 行且无激活诊断。roster（预设选择器）应出现「**小说助手**」。
 4. 新建会话选择「小说助手」，确认：
    - 工具列表包含 `novel_lint` / `novel_check` / `novel_briefing` / `novel_archive` / `novel_project` / `novel_import` / `novel_scan_book` / `novel_webui`；
-   - 技能列表包含 13 个 `novel-*` skill（7 个方法论 + 6 个 novel-style-* 风格，风格按作品归属加载）；
+   - 技能列表包含全部 18 个 `novel-*` skill（12 个方法论 + 6 个 novel-style-* 风格，风格按作品归属加载）；
    - 系统提示包含「小说助手」人设与工作法路由段。
 
 **从旧目录式安装迁移**：若之前把本仓库复制到了 `$DSH_HOME/.agent-presets/novelist/`，该目录在 ≥ 0.1.7 上不被读取也不会报错。按本路线安装 bundle 并验证后，删除该遗留目录即可（DSH 官方技能 *Migrate a legacy preset* 同此建议）。
