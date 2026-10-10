@@ -21,7 +21,7 @@ npm run verify:acp              # 交互式冒烟（真实 pipe stdio；需普�
    config 全部通过——「session/new 成功」在两代内核上都不构成证据，静默容忍是
    DSH 的真实行为）；
 3. **scoped skills**：沿官方读取路径（`standingKeyFor`/`acquireScope` +
-   `skills.list({cwd, scope})`）断言 13 个 `novel-*` skill 全部可发现。
+   `skills.list({cwd, scope})`）断言 18 个 `novel-*` skill 全部可发现。
 
 改动断言后务必做一次证伪（把安装副本改坏，确认判定翻转为 FAIL）。
 
