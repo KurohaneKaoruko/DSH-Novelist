@@ -126,7 +126,7 @@ const profilePatch = [
   "- id: system-prompt",
   "  config:",
   "    persona: >-",
-  "      你是一个面向小说作者的写作智能体，由 {{model}} 驱动，当前工作目录是 {{cwd}}。",
+  "      你是一个面向小说作者的写作智能体，由 {{model}} 驱动。",
   "",
   "# 预设名单提供方（bundle 的声明行 inject 本服务）。default 指向 novelist。",
   "- insert:",

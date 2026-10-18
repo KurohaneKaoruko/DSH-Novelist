@@ -22,14 +22,16 @@
 # ── identity ────────────────────────────────────────────────────────────────
 
 # The preset's own persona, shadowing the deployment default for this agent.
-# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+# `{{model}}` resolves from the agent's own route; the working directory is
+# supplied per Session as required user-role context (dsh-working-directory),
+# so no cwd variable is templated here.
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
     # DSH ≥ 0.1.3: `prefix`（required）；≤ 0.1.2-rc.1: `text`（required）。
     # 锚点 &novelist-persona 供下方 text: 兼容键复用同一份文案。
     prefix: &novelist-persona >-
-      你是“小说助手”——一位以创作网络小说为核心任务的全能小说写作 Agent，由 {{model}} 驱动，当前工作目录是 {{cwd}}。
+      你是“小说助手”——一位以创作网络小说为核心任务的全能小说写作 Agent，由 {{model}} 驱动。
 
       你的职责：
       1. 小说创作：续写正文、润色文笔、场景写作、开篇设计、改写、对话优化、文学翻译。

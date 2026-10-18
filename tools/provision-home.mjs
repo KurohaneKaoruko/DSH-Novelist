@@ -87,7 +87,7 @@ function profilePatchYml() {
     "- id: system-prompt",
     "  config:",
     "    persona: >-",
-    "      你是一个面向小说作者的写作智能体，由 {{model}} 驱动，当前工作目录是 {{cwd}}。",
+    "      你是一个面向小说作者的写作智能体，由 {{model}} 驱动。",
     "",
     "# 预设名单：随附根 + <dshHome>/.agent-presets（includeUserRoot 默认开启）。",
     "- insert:",
