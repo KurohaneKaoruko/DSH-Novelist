@@ -7,7 +7,7 @@
 //   Agent 是链路里最强、上下文最全的写手，且不引入独立子调用的失败模式。
 // - 工具只做代码擅长的事：
 //   · novel_lint      确定性 AI 味检查（纯代码规则，秒回不耗模型）
-//   · novel_briefing  写前材料组装（读工程文件，返回结构化原始材料）
+//   · novel_briefing  写前材料组装（读工程文件，返回结构化原始材料 + 伏笔体检）
 //   · novel_archive   归档落盘（Agent 按格式提取三段更新，工具原子写入）
 //   · novel_project   作品工程文件操作（初始化/保存/统计/索引）
 //   · novel_import    旧稿分章落盘（纯代码分章；逆推由 Agent 按 skill 完成）
@@ -15,8 +15,11 @@
 // - 写前材料 → Agent 亲写（生成时防味干预）→ novel_lint 自检循环 → 落盘 →
 //   novel_archive，构成每章闭环；方法论全部住在 skills/ 目录。
 //
-// 只使用 Node 内建模块与 Cordis 上下文服务（不 import 外部 npm 包，预设目录
-// 在用户主目录下无法解析 node_modules）。
+// 只使用 Node 内建模块、同包内的本地模块与 Cordis 上下文服务（不 import 外部
+// npm 包，预设目录在用户主目录下无法解析 node_modules）。正文检查引擎单独住在
+// ./lint.mjs，由 novel_lint 与保存门禁共用，并被 tools/test-lint.mjs 单测覆盖。
+
+import { lintText } from './lint.mjs';
 
 // ---------------- 共享工具函数 ----------------
 
@@ -38,6 +41,45 @@ function compileParams(spec) {
 // 章节文件名里的标题需要去掉文件系统不安全字符
 function safeName(name) {
   return String(name).replace(/[\\/:*?"<>|\r\n]/g, '').trim();
+}
+
+// 伏笔悬空阈值：铺设超过这么多章仍未回收，写前材料里单独点名提醒
+const STALE_CHAPTERS = 15;
+
+// 伏笔体检：从伏笔清单表格算出「未回收条目距本章已过多少章」，把长期悬空的
+// 条目挑出来。章数是确定性的算术，交给代码算比让模型逐行数表格可靠。
+// 返回 { total, openCount, stale[] }；表格不可解析时返回 null。
+export function auditForeshadow(table, currentNum) {
+  const rows = String(table || '').split('\n').filter((l) => l.trim().startsWith('|'));
+  if (rows.length < 2) return null;
+  const cellsOf = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  const header = cellsOf(rows[0]);
+  const idx = { name: 0, laid: 1, status: Math.max(0, header.length - 1) };
+  header.forEach((h, i) => {
+    if (/伏笔|名称|条目/.test(h)) idx.name = i;
+    else if (/铺设|埋设|起始/.test(h)) idx.laid = i;
+    else if (/状态/.test(h)) idx.status = i;
+  });
+  const items = [];
+  for (const row of rows.slice(1)) {
+    const cells = cellsOf(row);
+    // 跳过 | --- | --- | 分隔行
+    if (cells.every((c) => c === '' || /^:?-{2,}:?$/.test(c))) continue;
+    const name = cells[idx.name] || '';
+    if (!name || name === '伏笔') continue;
+    const status = cells[idx.status] || '';
+    const open = !/已回收|已收|已填|已兑现|已完成/.test(status);
+    const m = (cells[idx.laid] || '').match(/第\s*(\d+)\s*章/);
+    const laidAt = m ? parseInt(m[1], 10) : null;
+    const gap = laidAt !== null && currentNum ? currentNum - laidAt : null;
+    items.push({ name, status, laidAt, gap, open });
+  }
+  if (!items.length) return null;
+  const openItems = items.filter((i) => i.open);
+  const stale = openItems
+    .filter((i) => i.gap !== null && i.gap >= STALE_CHAPTERS)
+    .sort((a, b) => b.gap - a.gap);
+  return { total: items.length, openCount: openItems.length, stale };
 }
 
 export default {
@@ -130,146 +172,6 @@ export default {
       return { fs, root: workspaceRoot(exec, sp), policy: sp.resolve(session !== undefined ? { session } : {}) };
     }
 
-    // ---------------- 确定性 AI 味检查（纯代码，不调用模型） ----------------
-    // 把“正文铁律”中可量化的规则编译为计数/正则检查：能数出来的（标点、禁词、
-    // 副词频次、句式频次、比喻密度、句长波动、同句式连用）交给代码逐条核对，
-    // 模型自查只兜底不可量化项（视角越界、情绪标签、说明书腔）。
-    // 返回 { hardCount, softCount, report }：hard=必须修的硬违规，soft=建议逐条核对。
-    function lintText(body) {
-      const issues = [];
-      const occurs = (w) => body.split(w).length - 1;
-      const countRe = (re) => (body.match(re) || []).length;
-
-      // 硬违规：标点纪律（整章级）
-      const dash = countRe(/——/g);
-      if (dash > 1) issues.push(['hard', `破折号（——）出现 ${dash} 次`, '整章上限 1 次，且只用于对话被打断']);
-      const ellipsis = countRe(/……/g);
-      if (ellipsis > 2) issues.push(['hard', `省略号（……）出现 ${ellipsis} 次`, '整章上限 2 次，只用于对话犹豫']);
-      const semis = countRe(/；/g);
-      if (semis > 0) issues.push(['hard', `正文出现分号 ${semis} 处`, '正文不用分号；一句话说不完拆成两句']);
-      // 硬违规：感叹号按段（一段最多 1 个）
-      const badPara = [];
-      for (const p of body.split(/\n+/)) {
-        if (!p.trim()) continue;
-        const n = (p.match(/[！!]/g) || []).length;
-        if (n > 1) badPara.push(p.trim().slice(0, 14));
-      }
-      if (badPara.length) issues.push(['hard', `${badPara.length} 个段落感叹号超过 1 个`, `如“${badPara[0]}…”`]);
-      // 硬违规：标点堆砌情绪
-      const stacked = countRe(/[？！]{2,}|[。]{3,}/g);
-      if (stacked > 0) issues.push(['hard', `标点堆砌（？？/！！等）${stacked} 处`, '禁止用标点堆砌情绪']);
-      // 硬违规：正文残留 Markdown
-      if (/^#{1,6}\s|\*\*|```/.test(body)) issues.push(['hard', '正文残留 Markdown 符号（#/```/加粗）', '正文必须纯文本']);
-      // 硬违规：简体网文标点规范——直角引号/英文引号/错误省略号/装饰符号
-      const cornerQuotes = countRe(/[「」『』]/g);
-      if (cornerQuotes > 0) issues.push(['hard', `直角引号「」『』出现 ${cornerQuotes} 处`, '简体网文用弯双引号""（嵌套用\'\'），不用直角引号']);
-      const engQuotes = countRe(/["][^"\n]{1,40}["]/g);
-      if (engQuotes > 0) issues.push(['hard', `疑似英文直引号 "…" 出现 ${engQuotes} 处`, '一律改为中文弯引号""']);
-      const badEllipsis = countRe(/\.\.\.|。。。/g);
-      if (badEllipsis > 0) issues.push(['hard', `错误省略号（.../。。。）出现 ${badEllipsis} 处`, '中文省略号用 ……（六点一个标点）']);
-      const decorations = countRe(/[✦✨◆●★☆♦❖✳✴]/g);
-      if (decorations > 0) issues.push(['hard', `装饰符号（✦✨◆★等）出现 ${decorations} 处`, '正文与标题一律不撒装饰符号，分隔用空行']);
-
-      // 软违规：禁用词与模板化表达（一级套路化，出现即改；分级词库见 novel-ai-lexicon skill）
-      const banned = ['心中一沉', '瞳孔骤缩', '倒吸一口凉气', '后背发凉', '心脏漏跳', '指尖微颤', '眼底闪过', '嘴角勾起', '勾起一抹', '嘴角微微上扬', '嘴角扬起', '面色一变', '神色复杂', '眼中闪过', '心中一凛', '心中一动', '心下了然', '心中了然', '指节泛白', '指节发白', '微微挑眉', '不容置疑', '不可置信', '行云流水', '话锋一转', '眼神深邃', '目瞪口呆', '嘴巴张得能塞下', '时间仿佛', '像淬了毒', '重重砸在', '眼中流露出', '空气凝滞', '空气安静', '空气瞬间安静', '脸上堆满了笑', '世界都安静', '远没有这么简单', '不知过了多久', '一室寂静', '难以言喻', '无法形容', '意味深长', '耐人寻味', '他不知道的是', '复杂的情绪', '眼眸', '薄唇', '不卑不亢', '隐隐有了猜测', '近乎偏执', '力道大得惊人', '让空气的温度都下降', '透露出的寒意', '像在看一个',
-        // 第二代伪外化与套话（AI 味新特征，见 novel-ai-lexicon 结构层）
-        '呼吸一滞', '呼吸一窒', '心头一紧', '喉结', '指腹摩挲', '眸光', '眸色', '眸子', '眸底', '笑意不达眼底', '几不可察', '几不可闻', '气氛降到', '沉默蔓延', '过了一个世纪', '才刚刚开始', '深不可测', '高深莫测',
-        // 数字装具体（秒表式计时与“第 N 次”模板）
-        '沉默了三秒', '沉默了几秒', '停顿了几秒', '停顿了三秒', '三秒后', '几秒钟后', '两秒钟', '第无数次', '数不清第几次'];
-      const bannedHits = [];
-      for (const w of banned) {
-        const n = occurs(w);
-        if (n > 0) bannedHits.push(`“${w}”×${n}`);
-      }
-      if (bannedHits.length) issues.push(['soft', '禁用词/模板化表达', bannedHits.join('、')]);
-      // 软违规：万能量词
-      const quantHits = [];
-      for (const w of ['一丝', '一抹', '几分', '一股', '些许']) {
-        const n = occurs(w);
-        if (n > 0) quantHits.push(`“${w}”×${n}`);
-      }
-      if (quantHits.length) issues.push(['soft', '万能量词', `${quantHits.join('、')}（全砍）`]);
-      // 软违规：副词/高频词频次（每词上限 2 次；二级词库见 novel-ai-lexicon）
-      const advHits = [];
-      for (const w of ['缓缓', '轻轻', '微微', '不由得', '忍不住', '下意识地', '突然', '忽然', '猛地', '顿时', '瞬间', '立刻', '连忙', '渐渐', '显然', '果然', '沉吟', '小心翼翼', '不动声色', '似乎', '淡淡', '不禁', '深吸一口气', '下一秒', '下一瞬', '随即', '旋即', '闻言', '见状', '注视', '凝视']) {
-        const n = occurs(w);
-        if (n > 2) advHits.push(`“${w}”×${n}`);
-      }
-      if (advHits.length) issues.push(['soft', '副词/高频词频次超限（每词上限 2 次）', advHits.join('、')]);
-      // 软违规：次高频词密度（正常词限频不限用，每词上限 3 次；超限说明落入模板）
-      const softHits = [];
-      for (const w of ['顿了顿', '沉默', '苦笑', '无奈', '半晌', '回过神', '一时间', '若有所思', '似笑非笑', '攥紧']) {
-        const n = occurs(w);
-        if (n > 3) softHits.push(`“${w}”×${n}`);
-      }
-      if (softHits.length) issues.push(['soft', '次高频词密度超限（每词上限 3 次）', `${softHits.join('、')}——正常词限频不限用，超限说明写成了模板反应`]);
-      // 软违规：极端词堆砌（密度制：每千字 ≤2）
-      const kChars = Math.max(1, Math.round(body.replace(/\s+/g, '').length / 1000));
-      const extreme = ['非常', '极其', '极大', '无比', '十分', '瞬间', '顿时', '刹那'];
-      const extremeTotal = extreme.reduce((s, w) => s + occurs(w), 0);
-      if (extremeTotal > kChars * 2) issues.push(['soft', `极端词 ${extremeTotal} 个（约 ${kChars} 千字）`, '密度应 ≤2/千字；程度靠具体画面给，删九成']);
-      // 软违规：句式频次
-      const buShi = countRe(/不是[^。！？\n]{0,30}而是/g);
-      if (buShi > 1) issues.push(['soft', `“不是……而是……”出现 ${buShi} 次`, '整章上限 1 次']);
-      const jiuZai = countRe(/就在这时|刹那间|的瞬间|此刻|这一刻|一时之间/g);
-      if (jiuZai > 2) issues.push(['soft', `“就在这时/刹那间/的瞬间/此刻/这一刻”合计 ${jiuZai} 次`, '整章合计上限 2 次']);
-      // 软违规：比喻引导词密度（同一引导词上限 3）
-      const simileHits = [];
-      const likeCount = countRe(/(?<![画肖雕影录照相])像/g);
-      if (likeCount > 3) simileHits.push(`“像”×${likeCount}`);
-      for (const w of ['仿佛', '如同', '宛如', '恰似']) {
-        const n = occurs(w);
-        if (n > 3) simileHits.push(`“${w}”×${n}`);
-      }
-      if (simileHits.length) issues.push(['soft', '比喻引导词频次（同一引导词上限 3，一段最多一个比喻）', simileHits.join('、')]);
-      // 软违规：AI 转折词/书面连接词/论文腔
-      const aiConn = ['然而，', '与此同时', '不仅如此', '值得一提的是', '不得不说', '综上所述', '由此可见', '某种意义上', '总而言之'];
-      const aiConnHits = aiConn.filter((w) => occurs(w) > 0).map((w) => `“${w.replace(/，$/, '')}”`);
-      if (aiConnHits.length) issues.push(['soft', 'AI 转折词/书面连接词', `${aiConnHits.join('、')}——删掉或换成口语衔接`]);
-      // 软违规：句长过于均匀（句长波动检测：段内长短句应有落差）
-      const sentences = body.split(/[。！？\n]+/).map((s) => s.trim()).filter((s) => s.length > 1);
-      if (sentences.length >= 8) {
-        const lens = sentences.map((s) => s.length);
-        const avg = lens.reduce((a, b) => a + b, 0) / lens.length;
-        const variance = lens.reduce((s, l) => s + (l - avg) ** 2, 0) / lens.length;
-        const cv = Math.sqrt(variance) / avg; // 变异系数
-        const shortCount = lens.filter((l) => l <= 8).length;
-        if (cv < 0.35 && shortCount < 3) issues.push(['soft', `句长过于均匀（变异系数 ${cv.toFixed(2)}，短句仅 ${shortCount} 个）`, '长短句要有落差：加碎句/单句成段，偶尔来一个 40 字长句']);
-      }
-      // 软违规：连续同句式开头（连续 3+ 句以相同人称代词/人名开头）
-      const starts = sentences.map((s) => (s.match(/^(他|她|它|我|你|林|苏|叶|楚|萧|陈|秦|李|张|王|刘|周|赵)/) || [])[1]).filter(Boolean);
-      let run = 1; let maxRun = 1;
-      for (let i = 1; i < starts.length; i += 1) {
-        if (starts[i] === starts[i - 1]) { run += 1; maxRun = Math.max(maxRun, run); } else run = 1;
-      }
-      if (maxRun >= 4) issues.push(['soft', `连续 ${maxRun} 句以“${starts[0] || '同一人称'}”类开头`, '连续同句式是强 AI 特征：换主语、倒装、或用动作句切入']);
-      // 软违规：心理描写密度（一章不超 5 处）
-      const psych = countRe(/心中|心头|涌上|感到/g);
-      if (psych > 5) issues.push(['soft', `心理/情绪标签类表达约 ${psych} 处`, '心理描写一章不超 5 处，改用行为外化']);
-      // 软违规：对话标签密度（AI 每句对话都挂“X道”类标签；真人多数靠上下文与动作识别说话人）
-      const quoteLines = Math.floor(countRe(/[“”]/g) / 2);
-      const tagTotal = ['说道', '问道', '答道', '应道', '开口道', '开口说道', '沉声道', '冷声道', '淡淡道', '低声道', '轻声道', '缓缓开口', '笑道', '叹道', '应了一声'].reduce((s, w) => s + occurs(w), 0);
-      if (tagTotal > Math.max(6, quoteLines * 0.5)) issues.push(['soft', `对话标签约 ${tagTotal} 个（引号句约 ${quoteLines} 句）`, '半数以上对话挂“X道”类标签是 AI 特征：能删则删，用动作行代替']);
-      // 软违规：段尾总结句（每段最后一句都在收束/点题/升华）
-      const tailSummary = body.split(/\n+/).map((p) => p.trim()).filter(Boolean)
-        .map((p) => (p.split(/(?<=[。！？…])/).pop() || '').trim())
-        .filter((s) => /^(他知道|她知道|他明白|她明白|这一刻，|这一次，|或许，|也许，|仿佛)/.test(s)).length;
-      if (tailSummary > 2) issues.push(['soft', `${tailSummary} 个段落以总结/点题句收尾`, '段尾停在动作、台词或物证上，不要每段都收束']);
-      // 软违规：章末模板收尾（气氛句/升华句当钩子）
-      const tailText = body.slice(-80);
-      const hookTpl = ['才刚刚开始', '夜，深了', '夜色渐深', '故事，才', '他知道，这一切', '他不知道的是'].filter((w) => tailText.includes(w));
-      if (hookTpl.length) issues.push(['soft', `章末疑似模板收尾（${hookTpl.join('、')}）`, '钩子必须是具体事件或具体台词，不是气氛句']);
-
-      const hardCount = issues.filter((i) => i[0] === 'hard').length;
-      const softCount = issues.length - hardCount;
-      const lines = [];
-      if (!issues.length) lines.push('通过：未发现可量化的铁律违规（视角越界、说明书腔、情绪太平均等不可量化项仍需人工/模型自查）。');
-      for (const [level, name, detail] of issues) {
-        lines.push(`- ${level === 'hard' ? '【必须修】' : '【建议查】'}${name}——${detail}`);
-      }
-      return { hardCount, softCount, report: lines.join('\n') };
-    }
-
     // 工具注册工厂：spec = { name, description, parameters, run, timeoutMs? }
     function tool(spec) {
       const def = {
@@ -292,7 +194,7 @@ export default {
     // ---------------- 1. AI 味确定性检查 ----------------
     tool({
       name: 'novel_lint',
-      description: 'AI 味与正文铁律确定性检查（纯代码规则，不调用模型，秒回）：标点纪律（破折号/省略号/感叹号/分号）、简体网文标点规范（直角引号/英文引号/错误省略号/装饰符号）、禁用词与模板化表达（含第二代伪外化：呼吸一滞/喉结滚动等）、数字装具体类套话、万能量词、副词与次高频词频次、极端词密度、句式频次、AI 转折词与论文腔、比喻引导词密度、句长均匀度（变异系数）、连续同句式开头、心理描写密度、对话标签密度、段尾总结句、章末模板收尾、Markdown 残留。亲写正文后必跑；hard 项必须修，soft 项逐条核对（可能有误报）。',
+      description: 'AI 味与正文铁律确定性检查（纯代码规则，不调用模型，秒回）：标点纪律（破折号/省略号/感叹号/分号）、简体网文标点规范（直角引号/英文引号/错误省略号/装饰符号/中文里的半角标点）、引号与括号配对、禁用词与模板化表达（含第二代伪外化：呼吸一滞/喉结滚动等）、数字装具体类套话、万能量词、副词与次高频词频次、极端词密度、句式频次、AI 转折词与论文腔、比喻引导词密度、句长均匀度（变异系数）、连续同句式开头、段落开头雷同、整句重复、心理描写密度、对话标签密度、段尾总结句、章末模板收尾、章节字数区间、Markdown 残留。亲写正文后必跑；hard 项必须修，soft 项逐条核对（可能有误报）。',
       timeoutMs: 30000,
       parameters: {
         text: { type: 'string', description: '待检查的正文', required: true },
@@ -415,7 +317,7 @@ export default {
     // 伏笔/时间线/文风卡/大纲设定——全部原文材料，浓缩与取舍由 Agent 完成。
     tool({
       name: 'novel_briefing',
-      description: '写前材料组装：从作品工程读取全部相关材料——前 10 章结尾（必要时可扩到 20 章）、上一章结尾原文、最近归档、出场人物卡（按本章计划中人名自动匹配）、活跃伏笔清单、时间线、文风卡、大纲与设定集——以结构化原文返回，并列出材料覆盖情况。零模型调用；材料取舍由你判断。每章动笔前必调，长篇一致性靠它兜底。',
+      description: '写前材料组装：从作品工程读取全部相关材料——前 10 章结尾（必要时可扩到 20 章）、上一章结尾原文、最近归档、出场人物卡（按本章计划中人名自动匹配）、活跃伏笔清单与伏笔体检（未回收条目已悬空多少章，超期条目单独点名）、时间线、文风卡、大纲与设定集——以结构化原文返回，并列出材料覆盖情况。零模型调用；材料取舍由你判断。每章动笔前必调，长篇一致性靠它兜底。',
       timeoutMs: 60000,
       parameters: {
         chapter_number: { type: 'integer', description: '准备写的章节序号（用于定位之前的章节；不填则取最新一章之后）' },
@@ -427,7 +329,6 @@ export default {
         if (!fc) throw new Error('文件系统服务不可用');
         const proj = openProject(fc.fs, fc.root, fc.policy);
         const parts = [];
-        const autoParts = [];
         const found = [];
         const missing = [];
         const collect = async (dir, label, maxFiles, cap) => {
@@ -457,11 +358,29 @@ export default {
             const text = await proj.readMaybe(`人物卡/${cname}`, 2000);
             if (text && text.trim()) parts.push(`【人物卡 · ${cname.replace(/\.md$/, '')}】\n${text}`);
           }
-          if (matched.length) autoParts.push(`人物卡按名匹配×${matched.length}（${matched.join('、')}）`);
           found.push('人物卡');
         }
         const foreshadow = await proj.readMaybe('伏笔清单.md', 3000);
-        if (foreshadow && foreshadow.trim()) { parts.push(`【伏笔清单】\n${foreshadow}`); found.push('伏笔清单'); } else missing.push('伏笔清单');
+        if (foreshadow && foreshadow.trim()) {
+          parts.push(`【伏笔清单】\n${foreshadow}`);
+          found.push('伏笔清单');
+          // 伏笔体检：把「铺设已久仍未回收」的条目单独点名（章数由代码算）
+          const latestName = await proj.latestChapter(undefined);
+          const latestNum = latestName ? parseInt((latestName.match(/^第(\d+)章/) || [])[1], 10) : null;
+          const curNum = (args && args.chapter_number) || (Number.isNaN(latestNum) ? null : (latestNum || 0) + 1);
+          const audit = auditForeshadow(foreshadow, curNum);
+          if (audit) {
+            const head = `【伏笔体检】清单共 ${audit.total} 条，未回收 ${audit.openCount} 条`;
+            if (audit.stale.length) {
+              const rows = audit.stale.map((i) => `- 「${i.name}」第${String(i.laidAt).padStart(3, '0')}章铺设，已过 ${i.gap} 章（状态：${i.status || '未填'}）`);
+              parts.push(`${head}。以下 ${audit.stale.length} 条铺设超过 ${STALE_CHAPTERS} 章仍未回收，动笔前先决定：本章推进、确认继续保留、还是已废弃需改状态。\n${rows.join('\n')}`);
+            } else if (audit.openCount > 0) {
+              parts.push(`${head}，没有铺设超过 ${STALE_CHAPTERS} 章的悬空条目。`);
+            } else {
+              parts.push(`${head}，全部已回收。`);
+            }
+          }
+        } else missing.push('伏笔清单');
         const timeline = await proj.readMaybe('时间线.md', 2000);
         if (timeline && timeline.trim()) { parts.push(`【时间线】\n${timeline}`); found.push('时间线'); } else missing.push('时间线');
         const archives = await proj.listMd('归档');
@@ -516,6 +435,10 @@ export default {
         const table = args && typeof args.foreshadow_table === 'string' && args.foreshadow_table.trim() ? args.foreshadow_table.trim() : '';
         const rows = args && typeof args.timeline_rows === 'string' && args.timeline_rows.trim() ? args.timeline_rows.trim() : '';
         if (!report && !table && !rows) throw new Error('三段更新全部为空：至少提供 archive_report');
+        // 归档记录是下一章写前的唯一摘要来源，过短的占位文本等于没归档
+        if (report && report.replace(/\s+/g, '').length < 20 && !table && !rows) {
+          throw new Error(`archive_report 只有 ${report.replace(/\s+/g, '').length} 字，太短了：至少写清 ①本章摘要（150 字内）②人物状态变化 ③新增设定 ④遗留问题 四段。工程未被写入。`);
+        }
         // 格式校验（schema 门禁）：表格式不对就拒收，防止坏数据进工程
         if (table) {
           const firstLine = table.split('\n').map((l) => l.trim()).find((l) => l) || '';
@@ -557,7 +480,7 @@ export default {
     // ---------------- 4. 作品工程 ----------------
     tool({
       name: 'novel_project',
-      description: '作品工程：把小说组织成 Obsidian 友好的 Markdown 工程——初始化目录结构（正文/大纲/设定集/人物卡/归档/伏笔清单/时间线/文风卡）、保存章节、统计进度、整理作品索引。纯文件操作，零模型调用；内容生成（伏笔清单表/时间线表等）由你完成后用文件工具或本工具落盘。',
+      description: '作品工程：把小说组织成 Obsidian 友好的 Markdown 工程——初始化目录结构（正文/大纲/设定集/人物卡/归档/伏笔清单/时间线/文风卡）、保存章节（内置 lint 门禁）、统计进度（含篇幅偏离 2000–4000 字的章节标记）、整理作品索引。纯文件操作，零模型调用；内容生成（伏笔清单表/时间线表等）由你完成后用文件工具或本工具落盘。',
       timeoutMs: 120000,
       parameters: {
         action: { type: 'string', enum: ['初始化工程', '保存章节', '统计进度', '整理索引'], description: '操作类型', required: true },
@@ -609,23 +532,36 @@ export default {
         } else if (action === '统计进度') {
           const names = await proj.listMd('正文');
           const rows = [];
+          const counts = [];
           let total = 0;
           for (const name of names) {
             const text = await proj.readMaybe(`正文/${name}`);
             const count = text ? text.replace(/\s+/g, '').length : 0;
             total += count;
-            rows.push(`| ${name.replace(/\.md$/, '')} | ${count} |`);
+            counts.push({ name: name.replace(/\.md$/, ''), count });
           }
           const avg = names.length ? Math.round(total / names.length) : 0;
-          out.push([
-            `## 进度统计`,
-            ``,
-            `| 章节 | 字数 |`,
-            `| --- | --- |`,
+          const short = counts.filter((c) => c.count > 0 && c.count < 2000);
+          const long = counts.filter((c) => c.count > 4000);
+          // 章数多时只列最近 60 章，避免整本目录把上下文吃满
+          const shown = counts.length > 60 ? counts.slice(-60) : counts;
+          for (const c of shown) {
+            const mark = c.count === 0 ? '空文件' : c.count < 2000 ? '偏短' : c.count > 4000 ? '偏长' : '';
+            rows.push(`| ${c.name} | ${c.count} | ${mark} |`);
+          }
+          const lines = [`## 进度统计`, ``];
+          if (counts.length > 60) lines.push(`（共 ${counts.length} 章，下表仅列最近 60 章；总字数与分布统计覆盖全书）`, '');
+          lines.push(
+            `| 章节 | 字数 | 备注 |`,
+            `| --- | --- | --- |`,
             ...rows,
             ``,
             `章节数：${names.length}；总字数：${total}；平均每章：${avg}`,
-          ].join('\n'));
+            short.length || long.length
+              ? `篇幅偏离默认区间（2000–4000 字）：偏短 ${short.length} 章${short.length ? `（${short.slice(0, 5).map((c) => c.name).join('、')}${short.length > 5 ? ' 等' : ''}）` : ''}、偏长 ${long.length} 章${long.length ? `（${long.slice(0, 5).map((c) => c.name).join('、')}${long.length > 5 ? ' 等' : ''}）` : ''}。`
+              : '篇幅全部落在默认区间（2000–4000 字）。',
+          );
+          out.push(lines.join('\n'));
         } else if (action === '整理索引') {
           const t = args && args.title ? args.title : '未命名作品';
           const chapters = await proj.listMd('正文');
@@ -655,17 +591,19 @@ export default {
     // ---------------- 5. 旧稿导入（纯代码分章） ----------------
     tool({
       name: 'novel_import',
-      description: '旧稿导入：把已有小说存稿接入作品工程——按“第X章”标记分章、逐章落盘到 正文/ 并生成索引。纯代码分章，零模型调用；导入后的大纲/人物卡/设定集逆推由你按《novel-analysis》（拆书）与《novel-project》（建档格式）完成并自行落盘。',
+      description: '旧稿导入：把已有小说存稿接入作品工程——按“第X章”标记分章、逐章落盘到 正文/ 并生成索引。撞号保护：目标章号已有正文文件时整批拒收（不会静默覆盖），续接请调高起始章号，确要覆盖传 force。纯代码分章，零模型调用；导入后的大纲/人物卡/设定集逆推由你按《novel-analysis》（拆书）与《novel-project》（建档格式）完成并自行落盘。',
       timeoutMs: 120000,
       parameters: {
         text: { type: 'string', description: '旧稿全文（含“第X章”等章节标记的长文本）', required: true },
         title: { type: 'string', description: '作品名（写入索引，可选）' },
         chapter_number: { type: 'integer', description: '起始章号（默认 1，已有章节续接时改这里）' },
+        force: { type: 'boolean', description: '目标章号已有章节文件时是否覆盖（默认拒绝，防止旧稿导入冲掉现有正文）' },
       },
       run: async (args, exec) => {
         const fc = fsContext(exec);
         if (!fc) throw new Error('文件系统服务不可用');
         const { fs, root, policy } = fc;
+        const proj = openProject(fs, root, policy);
         const text = args && typeof args.text === 'string' ? args.text : '';
         if (!text.trim()) throw new Error('缺少旧稿文本（text）');
         const start = args && args.chapter_number ? args.chapter_number : 1;
@@ -688,16 +626,31 @@ export default {
         const real = chapters.filter((c) => c.body.join('\n').trim().length > 0 || c.title);
         if (!real.length) throw new Error('未能识别出任何章节，请确认文本包含“第X章”类章节标记');
 
-        // 2) 逐章落盘（文件名去掉原“第X章”前缀，按新序号重排）
-        const saved = [];
-        for (let i = 0; i < real.length; i += 1) {
-          const body = real[i].body.join('\n').trim();
+        // 2) 先算好每章的目标文件，再检查是否与现有章节撞号——旧稿导入绝不能
+        //    静默覆盖已经写好的正文，撞号时整批拒收并让调用方改起始章号。
+        const targets = [];
+        for (const c of real) {
+          const body = c.body.join('\n').trim();
           if (!body) continue;
-          const cleanTitle = real[i].title.replace(/^第[0-9零一二三四五六七八九十百千两]+[章回节]\s*[:：、.\-—]?\s*/, '');
-          const file = await saveChapterFile(fs, root, policy, start + saved.length, cleanTitle, body);
+          const cleanTitle = c.title.replace(/^第[0-9零一二三四五六七八九十百千两]+[章回节]\s*[:：、.\-—]?\s*/, '');
+          targets.push({ num: start + targets.length, title: cleanTitle, body });
+        }
+        const existing = await proj.listMd('正文');
+        const conflicts = targets
+          .map((t) => ({ num: t.num, hit: existing.find((n) => n.startsWith(`第${String(t.num).padStart(3, '0')}章`)) }))
+          .filter((c) => c.hit);
+        if (conflicts.length && !(args && args.force === true)) {
+          const sample = conflicts.slice(0, 5).map((c) => `第${c.num}章（${c.hit}）`).join('、');
+          throw new Error(`导入撞号：${conflicts.length} 个目标章号在 正文/ 里已有文件（${sample}${conflicts.length > 5 ? ' 等' : ''}）。工程未被写入。续接旧稿请把 chapter_number 设到现有最新章之后；确要覆盖请传 force: true。`);
+        }
+
+        // 3) 逐章落盘（文件名去掉原“第X章”前缀，按新序号重排）
+        const saved = [];
+        for (const t of targets) {
+          const file = await saveChapterFile(fs, root, policy, t.num, t.title, t.body);
           saved.push(file);
         }
-        const out = [`已导入 ${saved.length} 章到 正文/（第${start}章起）`];
+        const out = [`已导入 ${saved.length} 章到 正文/（第${start}章起）${conflicts.length ? `；覆盖了 ${conflicts.length} 个同名章节（force: true）` : ''}`];
 
         if (args && args.title) {
           const listLines = saved.map((f) => '- [[' + f.replace(/^正文\//, '').replace(/\.md$/, '') + ']]').join('\n');
@@ -706,7 +659,7 @@ export default {
           await fs.writeText(target, readme, undefined, undefined, policy);
           out.push('已更新索引：README.md');
         }
-        out.push('下一步（由你完成）：按《novel-analysis》拆书方法逆推大纲；按《novel-project》建档格式为的出现人物建人物卡、按类别整理设定集；最后 novel_project 整理索引。');
+        out.push('下一步（由你完成）：按《novel-analysis》拆书方法逆推大纲；按《novel-project》建档格式为出场人物建人物卡、按类别整理设定集；最后 novel_project 整理索引。');
         return out.join('\n');
       },
     });
