@@ -4,12 +4,32 @@
 仍可正常挂载（自 DSH-Novel 桌面端迁移；不需要 API Key，不发起 LLM 调用）。
 
 ```bash
+npm test                        # 规则单测 + 工具层集成测试（秒级，不装内核）
 npm run kernel:install          # 安装目录式验证内核 tools/kernel/（@deepseek-ai/dsh@0.1.2-rc.1，首次 / 升级时）
 npm run verify:kernel           # 目录式路线冒烟（0.1.2；--kernel 可换 0.1.6 等其他目录式内核）
 npm run kernel:install:bundle   # 安装 bundle 验证内核 tools/kernel-bundle/（@deepseek-ai/dsh@0.2.0-rc.2）
 npm run verify:bundle           # bundle 路线冒烟（≥ 0.1.7；--kernel 可换 0.1.7-rc.2 等）
 npm run verify:acp              # 交互式冒烟（真实 pipe stdio；需普通终端环境，目录式）
 ```
+
+## 两层测试（npm test）
+
+安装冒烟只能证明「预设挂得上」。规则判得对不对、工具之间的工程流转通不通，
+由两个不依赖内核的测试脚本覆盖：
+
+**`test-lint.mjs` —— 规则单测**：直接 import `plugins/lint.mjs` 与伏笔体检函数，
+用零依赖的断言表把每条规则钉住：
+
+- **正向**：该报的必须报（每条硬规则、主要软规则各至少一例）；
+- **反向**：干净稿不许报出硬违规，也不许误报主要软规则；
+- **回归**：修过的判定缺陷单独留用例（连续同句式开头曾误报首句人称、长短禁词重叠曾重复计数、Markdown 残留曾只匹配首行）。
+
+**`test-tools.mjs` —— 工具层集成**：用 `node:fs` 实现最小的 fs / sandboxPolicy
+服务，直接调用插件导出的 `apply(ctx)`，把注册出来的 7 个工具当函数跑在临时目录里，
+覆盖工程流转：初始化骨架 → 保存门禁拦截/放行 → 写前材料（含伏笔体检）→ 进度统计
+（篇幅标记）→ 导入撞号保护 → 归档格式校验 → 全书体检材料。
+
+改规则或改工具时同步加用例，并做一次证伪：把实现临时改坏，确认用例翻红后再还原。
 
 ## 验证原理（硬断言，不是「能启动就行」）
 
