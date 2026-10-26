@@ -4,7 +4,7 @@
 
 ## 包含内容
 
-> skills 本体在独立仓库 [Novelist-Skills](https://github.com/KurohaneKaoruko/Novelist-Skills)（跨项目通用，不绑死本仓库），以 submodule 形式挂载于本仓库 `skills/` 目录：12 个方法论 skill 按需加载，6 个文风 skill 按作品风格加载。各 skill 的清单与职责见 [Novelist-Skills README](https://github.com/KurohaneKaoruko/Novelist-Skills#readme)。克隆本仓库请带 `--recurse-submodules`。
+> skills 本体在独立仓库 [Novelist-Skills](https://github.com/KurohaneKaoruko/Novelist-Skills)，以 submodule 形式挂载于本仓库 `skills/` 目录：12 个方法论 skill 按需加载，6 个文风 skill 按作品风格加载。各 skill 的清单与职责见 [Novelist-Skills README](https://github.com/KurohaneKaoruko/Novelist-Skills#readme)。克隆本仓库请带 `--recurse-submodules`。
 
 **1 个插件（7 个工具，纯代码实现，无模型调用）**
 
