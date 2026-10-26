@@ -3,9 +3,12 @@
 Thumbs.db
 desktop.ini
 *.swp
-.idea/
-.vscode/
 *.iml
+
+# 点号开头的本地目录一律不入库（编辑器配置、工具缓存、本地工作区等）。
+# .github 是 CI 配置，必须保留，因此单独取消忽略。
+.*/
+!.github/
 
 # local research / scratch files never belong here
 *.log
