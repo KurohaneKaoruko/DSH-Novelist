@@ -1,6 +1,10 @@
-# Novelist · 小说助手（DeepSeek Harness 智能体预设）
+# DSH-Novelist · 小说助手
 
-一个 DeepSeek Harness 智能体预设，面向中文网络小说的长篇创作。安装后新建会话选择「小说助手」即可使用。
+一个 DeepSeek Harness 智能体预设，面向中文网络小说的长篇创作，可以把小说的设定和正文作为一个作品工程来管理。
+
+安装后新建会话选择「小说助手」即可使用。
+
+建议搭配 Obsidian 或是其他支持 Markdown 文件的笔记软件。
 
 ## 包含内容
 
