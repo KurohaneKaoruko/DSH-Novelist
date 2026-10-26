@@ -7,6 +7,21 @@ on:
   workflow_dispatch:
 
 jobs:
+  # 规则级回归 + 工具层集成：不需要装内核，几秒跑完。
+  lint-rules:
+    name: 检查引擎单测与工具集成
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 跑规则单测与工具集成测试
+        run: npm test
+
   # 目录式路线（DSH ≤ 0.1.6）：钉版内核 0.1.2-rc.1，目录复制安装。
   verify-legacy:
     name: 目录式路线冒烟（0.1.2）
