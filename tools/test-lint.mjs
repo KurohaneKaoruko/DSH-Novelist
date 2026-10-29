@@ -231,6 +231,16 @@ check('“或许……，或许……”列举超 1 次报 soft', () => {
   assertIssue(r, 'soft', '或许', '或许列举');
 });
 
+check('可信理由场景的单次使用不误报（限级句式的判级留给模型）', () => {
+  // POV 受限：雾里真看不清——单次命中「不知是还是」≤1 不报
+  const r = lintText('雾里那团影子，不知道是野狗还是狼。');
+  assert(r.issues.filter((i) => i[1].includes('不知')).length === 0, `单次 POV 受限使用不应报，实际：${r.issues.map((i) => i[1]).join(' / ')}`);
+  // 装饰性使用：两处都没有理由——报，且建议里带「POV 真无法分辨」的判定提示
+  const deco = lintText('她不知道是该哭还是该笑。他不知道是该走还是该留。');
+  const hit = assertIssue(deco, 'soft', '不知是', '装饰性使用');
+  assert(hit[2].includes('POV'), `建议应含 POV 判定提示，实际：${hit[2]}`);
+});
+
 check('“一种难以……的感觉”零容忍报 soft', () => {
   const r = lintText('心里涌起一股难以言说的滋味。');
   assertIssue(r, 'soft', '难以', '难以感觉');
