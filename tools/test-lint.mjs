@@ -168,6 +168,26 @@ check('AI 转折词报 soft', () => {
   assertIssue(r, 'soft', 'AI 转折词', '转折词');
 });
 
+check('“不是……而是……”零容忍报 soft（回归：曾是整章限 1 次）', () => {
+  const r = lintText('这不是结束，而是新的开始。');
+  const hit = assertIssue(r, 'soft', '不是……而是', '不是而是');
+  assert(hit[2].includes('零容忍'), `修复建议应含「零容忍」指引，实际：${hit[2]}`);
+});
+
+check('迂回定义句式家族报 soft', () => {
+  const r = lintText('那不是愤怒，是恐惧。这并非巧合。这不仅仅是一场比赛。与其说是指导，不如说是监视。他要的从来不是钱。');
+  const hit = assertIssue(r, 'soft', '迂回定义', '迂回定义');
+  for (const part of ['不是……，是……', '并非', '不仅仅是', '与其说是', '从来不是']) {
+    assert(hit[2].includes(part), `应报出「${part}」，实际：${hit[2]}`);
+  }
+});
+
+check('对话内澄清与正常否定不误报迂回定义', () => {
+  const r = lintText('他说：“我说的不是这个意思。”屋里没有人。他不再犹豫，转身就走。');
+  assertNoIssue(r, '迂回定义', '迂回定义误报');
+  assertNoIssue(r, '不是……而是', '不是而是误报');
+});
+
 // ---------------- 四、软违规：句式与结构 ----------------
 check('连续同句式开头报 soft，且报出正确的人称（回归：曾误报首句人称）', () => {
   const r = lintText('她把伞收起来，靠在门边。他走过去。他停下来。他回头看了一眼。他什么也没说。');

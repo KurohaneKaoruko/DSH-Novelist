@@ -139,9 +139,29 @@ export function lintText(body) {
   if (extremeTotal > kChars * 2) push('soft', `极端词 ${extremeTotal} 个（约 ${kChars} 千字）`, '密度应 ≤2/千字；程度靠具体画面给，删九成');
 
   const buShi = countRe(/不是[^。！？\n]{0,30}而是/g);
-  if (buShi > 1) push('soft', `“不是……而是……”出现 ${buShi} 次`, '整章上限 1 次');
+  if (buShi > 0) push('soft', `“不是……而是……”出现 ${buShi} 次`, '零容忍：先否定再肯定全是废话——直接写“是”的那一半，是什么就写什么');
   const jiuZai = countRe(/就在这时|刹那间|的瞬间|此刻|这一刻|一时之间/g);
   if (jiuZai > 2) push('soft', `“就在这时/刹那间/的瞬间/此刻/这一刻”合计 ${jiuZai} 次`, '整章合计上限 2 次');
+
+  // ── 迂回定义句式家族（零容忍：先否定/迂回再给结论，全是废话） ────
+  // 「不是X，(而)是Y」丢掉否定半边句意无损；「并非/从来不是」是评论腔；
+  // 「不仅仅是」扩围、「与其说是A不如说是B」比较修辞，同为 AI 高频迂回。
+  // 对话内澄清（“我说的不是这个意思”）不在此列——正则排除了引号内文。
+  const roundabout = [];
+  const rbPairs = [
+    [/不是[^。！？\n“”]{0,24}?[，,][^。！？\n“”]{0,4}?而是/g, '不是……而是……'],
+    [/不是[^。！？\n“”]{0,20}?，是/g, '不是……，是……'],
+    [/(从来|并|绝|从)不是|并非/g, '从来不是/并不是/并非'],
+    [/不仅仅?是|不只是/g, '不仅仅是/不只是'],
+    [/与其说是[^。！？\n]{0,20}?，不如说是/g, '与其说是……不如说是……'],
+  ];
+  for (const [re, name] of rbPairs) {
+    const n = countRe(re);
+    if (n > 0) roundabout.push(`“${name}”×${n}`);
+  }
+  if (roundabout.length) {
+    push('soft', `迂回定义句式（先否定/绕弯再给结论）${roundabout.length} 类`, `${roundabout.join('、')}——直接说重点：是什么就写什么，删掉否定和绕弯的半边`);
+  }
 
   const simileHits = [];
   const likeCount = countRe(/(?<![画肖雕影录照相])像/g);
