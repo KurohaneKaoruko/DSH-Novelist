@@ -188,6 +188,59 @@ check('对话内澄清与正常否定不误报迂回定义', () => {
   assertNoIssue(r, '不是……而是', '不是而是误报');
 });
 
+check('万能群像反应词报 soft（四目相对/相视一笑等）', () => {
+  const r = lintText('两人四目相对，随后相视一笑，一切尽在不言中。');
+  assertIssue(r, 'soft', '禁用词', '群像反应');
+});
+
+check('情绪成语标签报 soft（如释重负/五味杂陈等）', () => {
+  const r = lintText('听完这话，她如释重负地笑了。他心里五味杂陈。');
+  assertIssue(r, 'soft', '禁用词', '情绪成语');
+});
+
+check('生理反应第三代报 soft（头皮发麻/大脑一片空白等）', () => {
+  const r = lintText('那个念头让他头皮发麻，大脑一片空白。');
+  assertIssue(r, 'soft', '禁用词', '生理第三代');
+});
+
+check('声音万能框架与翻译腔弱动词报 soft', () => {
+  const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
+  assertIssue(r, 'soft', '禁用词', '回荡');
+  assertIssue(r, 'soft', '禁用词', '进行了一次');
+});
+
+check('看似/实则评论腔报 soft', () => {
+  const r = lintText('他看似平静，实则慌得不行。');
+  assertIssue(r, 'soft', '禁用词', '看似实则');
+});
+
+check('“当……的时候”超 1 次报 soft', () => {
+  const r = lintText('当他推开门的时候，屋里一片漆黑。当他回头的时候，走廊已空无一人。');
+  assertIssue(r, 'soft', '当……的时候', '当时候');
+});
+
+check('“不知是……还是……”超 1 次报 soft，单次不报', () => {
+  const multi = lintText('她不知道是该哭还是该笑。他不知道是该走还是该留。');
+  assertIssue(multi, 'soft', '不知是', '不知还是');
+  const single = lintText('不知是谁家的狗，叫了两声又不叫了。');
+  assertNoIssue(single, '不知是', '不知还是单次');
+});
+
+check('“或许……，或许……”列举超 1 次报 soft', () => {
+  const r = lintText('或许是累了吧，或许是怕了吧，他说不清。也许是晚了，也许是他累了，谁知道。'.replace(/也许/g, '或许'));
+  assertIssue(r, 'soft', '或许', '或许列举');
+});
+
+check('“一种难以……的感觉”零容忍报 soft', () => {
+  const r = lintText('心里涌起一股难以言说的滋味。');
+  assertIssue(r, 'soft', '难以', '难以感觉');
+});
+
+check('举例/解释框架报 soft（正文不是说明文）', () => {
+  const r = lintText('比如说，这门手艺讲究慢工。简而言之，他输了。');
+  assertIssue(r, 'soft', '举例/解释框架', '举例框架');
+});
+
 // ---------------- 四、软违规：句式与结构 ----------------
 check('连续同句式开头报 soft，且报出正确的人称（回归：曾误报首句人称）', () => {
   const r = lintText('她把伞收起来，靠在门边。他走过去。他停下来。他回头看了一眼。他什么也没说。');
