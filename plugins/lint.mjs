@@ -151,12 +151,16 @@ export function lintText(body) {
   if (softHits.length) push('soft', '次高频词密度超限（每词上限 3 次）', `${softHits.join('、')}——正常词限频不限用，超限说明写成了模板反应`);
 
   // ── 三、密度与句式 ──────────────────────────────────────────────────
+  // 叙述层文本：把成对引号及其内文整体替换成一个句号。句式套路只查叙述层——
+  // 引语是人物语言，对话里的自然澄清（“我说的不是这个意思”）不该按叙述腔挨罚；
+  // 替换成句号还能挡住「不是……“引语”……而是」这类跨引号拼接出的假匹配。
+  const narrative = text.replace(/“[^“”]*”/g, '。');
+  const countNarrative = (re) => (narrative.match(re) || []).length;
   const kChars = Math.max(1, Math.round(chars / 1000));
   const extremeTotal = EXTREME.reduce((s, w) => s + occurs(w), 0);
   if (extremeTotal > kChars * 2) push('soft', `极端词 ${extremeTotal} 个（约 ${kChars} 千字）`, '密度应 ≤2/千字；程度靠具体画面给，删九成');
 
-  const buShi = countRe(/不是[^。！？\n]{0,30}而是/g);
-  if (buShi > 0) push('soft', `“不是……而是……”出现 ${buShi} 次`, '零容忍：先否定再肯定全是废话——直接写“是”的那一半，是什么就写什么');
+  // 「不是……而是……」归入下方迂回定义句式家族统一报出（避免同一句式双重计数）
   const jiuZai = countRe(/就在这时|刹那间|的瞬间|此刻|这一刻|一时之间/g);
   if (jiuZai > 2) push('soft', `“就在这时/刹那间/的瞬间/此刻/这一刻”合计 ${jiuZai} 次`, '整章合计上限 2 次');
 
@@ -164,39 +168,40 @@ export function lintText(body) {
   // 「不是X，(而)是Y」丢掉否定半边句意无损；「并非/从来不是」是评论腔；
   // 「不仅仅是」扩围、「与其说是A不如说是B」比较修辞，同为 AI 高频迂回。
   // 无可信理由——真正的对比（两个选项摆在天平上）写法见 skill 文档。
-  // 对话内澄清（“我说的不是这个意思”）不在此列——正则排除了引号内文。
+  // 只查叙述层：对话内澄清（“我说的不是这个意思”“我不只是你的搭档”）
+  // 是人物在说话，不是作者的迂回腔，不许罚。
   const roundabout = [];
   const rbPairs = [
-    [/不是[^。！？\n“”]{0,24}?[，,][^。！？\n“”]{0,4}?而是/g, '不是……而是……'],
-    [/不是[^。！？\n“”]{0,20}?，是/g, '不是……，是……'],
+    [/不是[^。！？\n]{0,24}?[，,][^。！？\n]{0,4}?而是/g, '不是……而是……'],
+    [/不是[^。！？\n]{0,20}?[，,]是/g, '不是……，是……'],
     [/(从来|并|绝|从)不是|并非/g, '从来不是/并不是/并非'],
     [/不仅仅?是|不只是/g, '不仅仅是/不只是'],
     [/与其说是[^。！？\n]{0,20}?，不如说是/g, '与其说是……不如说是……'],
   ];
   for (const [re, name] of rbPairs) {
-    const n = countRe(re);
+    const n = countNarrative(re);
     if (n > 0) roundabout.push(`“${name}”×${n}`);
   }
   if (roundabout.length) {
-    push('soft', `迂回定义句式（先否定/绕弯再给结论）${roundabout.length} 类`, `${roundabout.join('、')}——直接说重点：是什么就写什么，删掉否定和绕弯的半边`);
+    push('soft', `迂回定义句式（先否定/绕弯再给结论）${roundabout.length} 类`, `零容忍：${roundabout.join('、')}——直接说重点，是什么就写什么，删掉否定和绕弯的半边`);
   }
 
   // ── 伪修饰/伪列举句式（有条件使用：可信理由成立时整章 ≤1） ────────
   // 可信理由必须来自故事世界（视角受限/情节需要/真实节点），不来自修辞冲动。
   // 「当X的时候」（≤1 次）：普通事件直接写，只有真正的节点才配时间框架
-  const dangShi = countRe(/当[^。！？\n“”]{1,20}的时候/g);
+  const dangShi = countNarrative(/当[^。！？\n]{1,20}的时候/g);
   if (dangShi > 1) push('soft', `“当……的时候”框架出现 ${dangShi} 次`, '上限 1 次（留给真正的节点：退伍/离乡/接手那天）；普通事件直接写发生了什么');
   // 「不知是X还是Y」（≤1 次）：POV 真的无法分辨时可用，装纠结不可
-  const buZhi = countRe(/(不知|不知道)是[^。！？\n“”]{2,20}还是/g);
+  const buZhi = countNarrative(/(不知|不知道)是[^。！？\n]{2,20}还是/g);
   if (buZhi > 1) push('soft', `“不知是……还是……”出现 ${buZhi} 次`, '上限 1 次（留给 POV 真无法分辨：隔着毛玻璃/天太黑）；装纠结的直接写他实际做了什么');
   // 「或许A，或许B」（≤1 次）：真实推测且后文验证其一，否则写确定的
-  const huoXu = countRe(/或许[^。！？\n“”]{2,20}[，,]或许/g);
+  const huoXu = countNarrative(/或许[^。！？\n]{2,20}[，,]或许/g);
   if (huoXu > 1) push('soft', `“或许……，或许……”出现 ${huoXu} 次`, '上限 1 次（留给后文会验证的真实推测）；回避式抒情删掉，写确定的那个');
   // 「像是A，又像是B」（≤1 次）：对象确实介于两者之间，否则选一个
-  const xiangShi = countRe(/像是[^。！？\n“”]{2,20}[，,]又像是/g);
+  const xiangShi = countNarrative(/像是[^。！？\n]{2,20}[，,]又像是/g);
   if (xiangShi > 1) push('soft', `“像是……，又像是……”出现 ${xiangShi} 次`, '上限 1 次（对象真介于两者间才可用）；多数情况选准一个写');
   // 「一种难以X的Y」（零容忍）：万能量词+不可名状=什么都没写
-  const nanYi = countRe(/一[种股抹]难以[^。！？\n“”]{0,10}(的感觉|的情绪|的滋味|的预感)/g);
+  const nanYi = countNarrative(/一[种股抹]难以[^。！？\n]{0,10}(的感觉|的情绪|的滋味|的预感)/g);
   if (nanYi > 0) push('soft', `“一种难以……的感觉/情绪”出现 ${nanYi} 次`, '零容忍：不可名状=没写；写具体的身体反应或行为');
   // 万能举例框架（≤1 次）：正文不该有解释腔
   const liJu = EXAMPLE_CONN.reduce((s, w) => s + occurs(w), 0);
