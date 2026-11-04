@@ -30,10 +30,13 @@ function assert(cond, message) {
   if (!cond) throw new Error(message);
 }
 
-// 断言某个 issue 存在（level 精确匹配，name 含子串）
-function assertIssue(result, level, namePart, label) {
-  const hit = result.issues.find((i) => i[0] === level && i[1].includes(namePart));
-  assert(hit, `${label}：未报出 ${level} 项「${namePart}」。实际：${result.issues.map((i) => `[${i[0]}]${i[1]}`).join(' / ') || '（无）'}`);
+// 断言某个 issue 存在（level 精确匹配，name 或 detail 含子串）
+// detailPart 传入时额外要求 detail（issue 第 3 列）含该子串——
+// 禁用词类 issue 的具体词全在 detail 里，只查 name 的话删词不会翻红。
+function assertIssue(result, level, namePart, label, detailPart) {
+  const hit = result.issues.find((i) => i[0] === level && i[1].includes(namePart)
+    && (detailPart === undefined || i[2].includes(detailPart)));
+  assert(hit, `${label}：未报出 ${level} 项「${namePart}」${detailPart ? `（detail 须含「${detailPart}」）` : ''}。实际：${result.issues.map((i) => `[${i[0]}]${i[1]} ${i[2]}`).join(' / ') || '（无）'}`);
   return hit;
 }
 
@@ -223,6 +226,16 @@ check('声音万能框架与翻译腔弱动词报 soft', () => {
 check('看似/实则评论腔报 soft', () => {
   const r = lintText('他看似平静，实则慌得不行。');
   assertIssue(r, 'soft', '禁用词', '看似实则');
+});
+
+check('词库漏收回归：翻译腔「给予了一个」与 skill 一级区补词报出', () => {
+  // 「给予了一个」曾在 1330e74 提交说明中声称收录但实际漏收；
+  // detailPart 参数钉住词本身，删词即翻红
+  const r = lintText('他给予了一个解释。她勾唇一笑，眼神坚定。听到这话，她僵住了。');
+  assertIssue(r, 'soft', '禁用词', '给予了一个', '给予了一个');
+  assertIssue(r, 'soft', '禁用词', '勾唇一笑', '勾唇一笑');
+  assertIssue(r, 'soft', '禁用词', '眼神坚定', '眼神坚定');
+  assertIssue(r, 'soft', '禁用词', '僵住', '僵住了');
 });
 
 check('“当……的时候”超 1 次报 soft', () => {
