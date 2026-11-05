@@ -19,6 +19,10 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "scripts": {
+    "lexicon:check": "node tools/check-lexicon-sync.mjs",
+    "test": "npm run lexicon:check && cd tools && npm test"
+  },
   "files": [
     "cordis.patch.yml",
     "agent.cordis.yml",

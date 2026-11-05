@@ -22,6 +22,18 @@ jobs:
       - name: 跑规则单测与工具集成测试
         run: npm test
 
+  # 词库同步校验：skill 一级区 ↔ lint BANNED 双向 diff，漂移即失败。
+  lexicon-sync:
+    name: 词库同步校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 校验 skill 词库与 lint 禁用词库一致
+        run: npm run lexicon:check
+
   # 目录式路线（DSH ≤ 0.1.6）：钉版内核 0.1.2-rc.1，目录复制安装。
   verify-legacy:
     name: 目录式路线冒烟（0.1.2）
