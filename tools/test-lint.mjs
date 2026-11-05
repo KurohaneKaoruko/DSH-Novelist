@@ -220,6 +220,14 @@ check('生理反应第三代报 soft（头皮发麻/大脑一片空白等）', (
   assertIssue(r, 'soft', '禁用词', '生理第三代', '大脑一片空白');
 });
 
+check('心动套话报 soft（心里一颤家族，novel-style-romance 心动写法）', () => {
+  const r = lintText('指尖相触的瞬间，她心里一颤。他心中一颤，心头一颤，心里一紧。');
+  const hit = assertIssue(r, 'soft', '禁用词', '心动套话', '心里一颤');
+  for (const part of ['心里一颤', '心中一颤', '心头一颤', '心里一紧']) {
+    assert(hit[2].includes(part), `应报出「${part}」，实际：${hit[2]}`);
+  }
+});
+
 check('声音万能框架与翻译腔弱动词报 soft', () => {
   const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
   assertIssue(r, 'soft', '禁用词', '回荡', '回荡着');
