@@ -245,6 +245,25 @@ check('悬疑氛围点名词报 soft（感到恐怖/诡异家族，novel-style-m
   assert(!hit[2].includes('“恐怖”×'), '裸词「恐怖/诡异」不在禁用表内');
 });
 
+check('风格开关：默认无风格时不按闻言见状规则报出', () => {
+  const r = lintText('闻言，他皱眉。见状，她退后。听见这话，他起身。听到这里，她冷笑。');
+  assertNoIssue(r, '转述词', '无风格默认');
+});
+
+check('风格开关：xianxia 传 2 次不报（古风放宽），5 次报出（放宽不等于不查）', () => {
+  const r2 = lintText('闻言，他皱眉。见状，她退后。', { style: 'xianxia' });
+  assertNoIssue(r2, '转述衔接词', '古风放宽');
+  const r3 = lintText('闻言，他皱眉。见状，她退后。听罢，他起身。闻言，她冷笑。闻言，他点头。', { style: 'xianxia' });
+  const hit3 = assertIssue(r3, 'soft', '转述衔接词', '古风 5 次报出');
+  assert(hit3[2].includes('“闻言”×3'), `detail 应含「“闻言”×3」，实际：${hit3[2]}`);
+});
+
+check('风格开关：现代风格传 1 次即报（prose-standards 对话纪律）', () => {
+  const r = lintText('闻言，他皱眉。见状，她退后。', { style: 'hotblood' });
+  const hit = assertIssue(r, 'soft', '转述衔接词', '现代限 1 次');
+  assert(hit[2].includes('合计上限 1 次'), `detail 应含「合计上限 1 次」，实际：${hit[2]}`);
+});
+
 check('声音万能框架与翻译腔弱动词报 soft', () => {
   const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
   assertIssue(r, 'soft', '禁用词', '回荡', '回荡着');

@@ -102,6 +102,28 @@ const TAIL_SUMMARY = /^(他知道|她知道|他明白|她明白|这一刻，|这
 const CHAPTER_MIN = 2000;
 const CHAPTER_MAX = 4000;
 
+// ---------------- 风格参数（novel-style-* 开关） ----------------
+//
+// lint 引擎是通用铁律；个别规则的宽严随题材变化（源头是 prose-standards 对话纪律：
+// 「现代背景“闻言/见状”合计 ≤1（古风武侠可放宽）」与 novel-ai-lexicon 白名单
+// 「语境宽容词：……古风武侠语境正常；现代都市背景按二级限频」）。此前这条
+// 风格条件规则只活在文档里，lint 无从执行——engine 加一个可选 style 参数：
+//   · 不传（默认）：执行对所有风格成立的通用规则；
+//   · 传 novel-style-* 的后缀（'xianxia' | 'hotblood' | …）：额外执行该风格的宽严分支。
+// 传参点：novel_lint 工具的 style 参数（Agent 依据已加载的风格 skill 传值，与
+// novel_briefing 的文风卡同源）；保存门禁暂不传（正文与风格 skill 的绑定由 Agent 把关）。
+
+// 转述衔接词（闻言/见状/听罢）：古风武侠是传统说书腔，限 4；现代背景合计 ≤1
+const STYLE_RELAY_MODERN = ['hotblood', 'lightnovel', 'mystery', 'romance', 'scifi'];
+const RELAY_WORDS = ['闻言', '见状', '听罢'];
+const RELAY_LIMIT_ANCIENT = 4;
+const RELAY_LIMIT_MODERN = 1;
+
+// 风格后缀 → 宽严表（键为 novel-style-* 的后缀）
+const STYLE_PROFILE = {
+  relayLimit: (style) => (STYLE_RELAY_MODERN.includes(style) ? RELAY_LIMIT_MODERN : RELAY_LIMIT_ANCIENT),
+};
+
 // ---------------- 引擎 ----------------
 
 // 正则元字符转义（迂回关联词等纯字面量词条安全地拼进 RegExp 用）
@@ -112,10 +134,13 @@ function escapeRegExp(s) {
 /**
  * 检查正文。
  * @param {string} body 正文纯文本
+ * @param {{style?: string}} [options] 可选风格开关（novel-style-* 后缀，如 'xianxia'）：
+ *   传入后额外执行随题材宽严变化的规则（现代背景转述词 ≤1，古风放宽）。
  * @returns {{hardCount: number, softCount: number, issues: Array<[string,string,string]>, report: string}}
  */
-export function lintText(body) {
+export function lintText(body, options) {
   const text = typeof body === 'string' ? body : '';
+  const style = options && typeof options.style === 'string' ? options.style : '';
   const issues = [];
   const occurs = (w) => text.split(w).length - 1;
   const countRe = (re) => (text.match(re) || []).length;
@@ -364,6 +389,20 @@ export function lintText(body) {
   const tailText = text.slice(-80);
   const hookTpl = TAIL_TEMPLATES.filter((w) => tailText.includes(w));
   if (hookTpl.length) push('soft', `章末疑似模板收尾（${hookTpl.join('、')}）`, '钩子必须是具体事件或具体台词，不是气氛句');
+
+  // ── 五b、风格条件规则（传入 style 时启用） ─────────────────────────
+  // 转述衔接词（闻言/见状/听罢）：现代背景合计 ≤1（prose-standards 对话纪律），
+  // 古风武侠放宽到限 4（说书腔是题材常规，lexicon 白名单「语境宽容词」）。
+  // 不传 style 时不按此规则报出——旧稿/未定风格的作品不受影响。
+  if (style) {
+    const relayHits = RELAY_WORDS.map((w) => [w, occurs(w)]).filter(([, n]) => n > 0);
+    const relayTotal = relayHits.reduce((s, [, n]) => s + n, 0);
+    const relayLimit = STYLE_PROFILE.relayLimit(style);
+    if (relayTotal > relayLimit) {
+      push('soft', `转述衔接词（闻言/见状/听罢）合计 ${relayTotal} 次`,
+        `命中：${relayHits.map(([w, n]) => `“${w}”×${n}`).join('、')}——当前风格（${style}）合计上限 ${relayLimit} 次；前后文能认出说话人就删掉，用动作行代替`);
+    }
+  }
 
   // ── 六、篇幅（默认标准 2000–4000 字） ───────────────────────────────
   // 只在正文已具章节体量（≥1000 字）时提示，避免片段检查刷屏

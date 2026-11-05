@@ -198,15 +198,17 @@ export default {
       timeoutMs: 30000,
       parameters: {
         text: { type: 'string', description: '待检查的正文', required: true },
+        style: { type: 'string', description: `可选，作品风格（novel-style-* 后缀）：${'hotblood / lightnovel / mystery / romance / scifi / xianxia'}。传入后执行随题材宽严变化的规则（现代题材转述词闻言/见状合计 ≤1，古风武侠放宽到 ≤4）；当前已加载某 novel-style-* skill 时必须传入` },
       },
       run: async (args) => {
         const text = args && typeof args.text === 'string' ? args.text : '';
         if (!text.trim()) throw new Error('缺少待检查文本（text）');
-        const { hardCount, softCount, report } = lintText(text);
+        const style = args && typeof args.style === 'string' ? args.style : '';
+        const { hardCount, softCount, report } = lintText(text, style ? { style } : undefined);
         const chars = text.replace(/\s+/g, '').length;
         const verdict = hardCount > 0 ? `发现 ${hardCount} 项硬违规，必须修（按清单逐句修复后可再跑一次复查）。` : '无硬违规。';
         const softLine = softCount > 0 ? `另有 ${softCount} 项软违规，建议逐条核对（禁词/频次类规则偶有语境误报，误报可忽略）。` : '';
-        return `【正文铁律检查】（${chars} 字 · 确定性规则 · 未调用模型）\n\n${report}\n\n${verdict}${softLine}`;
+        return `【正文铁律检查】（${chars} 字${style ? ` · 风格 ${style}` : ''} · 确定性规则 · 未调用模型）\n\n${report}\n\n${verdict}${softLine}`;
       },
     });
 
