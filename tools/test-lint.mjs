@@ -204,28 +204,32 @@ check('叙述层迂回句式照常报出（对话豁免不豁免叙述）', () =
 
 check('万能群像反应词报 soft（四目相对/相视一笑等）', () => {
   const r = lintText('两人四目相对，随后相视一笑，一切尽在不言中。');
-  assertIssue(r, 'soft', '禁用词', '群像反应');
+  assertIssue(r, 'soft', '禁用词', '群像反应', '四目相对');
+  assertIssue(r, 'soft', '禁用词', '群像反应', '相视一笑');
 });
 
 check('情绪成语标签报 soft（如释重负/五味杂陈等）', () => {
   const r = lintText('听完这话，她如释重负地笑了。他心里五味杂陈。');
-  assertIssue(r, 'soft', '禁用词', '情绪成语');
+  assertIssue(r, 'soft', '禁用词', '情绪成语', '如释重负');
+  assertIssue(r, 'soft', '禁用词', '情绪成语', '五味杂陈');
 });
 
 check('生理反应第三代报 soft（头皮发麻/大脑一片空白等）', () => {
   const r = lintText('那个念头让他头皮发麻，大脑一片空白。');
-  assertIssue(r, 'soft', '禁用词', '生理第三代');
+  assertIssue(r, 'soft', '禁用词', '生理第三代', '头皮发麻');
+  assertIssue(r, 'soft', '禁用词', '生理第三代', '大脑一片空白');
 });
 
 check('声音万能框架与翻译腔弱动词报 soft', () => {
   const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
-  assertIssue(r, 'soft', '禁用词', '回荡');
-  assertIssue(r, 'soft', '禁用词', '进行了一次');
+  assertIssue(r, 'soft', '禁用词', '回荡', '回荡着');
+  assertIssue(r, 'soft', '禁用词', '进行了一次', '进行了一次');
 });
 
 check('看似/实则评论腔报 soft', () => {
   const r = lintText('他看似平静，实则慌得不行。');
-  assertIssue(r, 'soft', '禁用词', '看似实则');
+  assertIssue(r, 'soft', '禁用词', '看似实则', '“看似”');
+  assertIssue(r, 'soft', '禁用词', '看似实则', '“实则”');
 });
 
 check('词库漏收回归：翻译腔「给予了一个」与 skill 一级区补词报出', () => {
@@ -236,6 +240,28 @@ check('词库漏收回归：翻译腔「给予了一个」与 skill 一级区补
   assertIssue(r, 'soft', '禁用词', '勾唇一笑', '勾唇一笑');
   assertIssue(r, 'soft', '禁用词', '眼神坚定', '眼神坚定');
   assertIssue(r, 'soft', '禁用词', '僵住', '僵住了');
+});
+
+check('二级区补收：心理动词、迂回关联词、高浓度氛围词按新表报出', () => {
+  // 心理动词进 SOFT_FREQ（≤3）；迂回关联词与氛围词是合计密度制——
+  // 每个断言同时钉住具体词（detail），删词即翻红
+  const r = lintText('他意识到出事了。很快又意识到门是开的。接着意识到脚印不该在这。最后意识到楼上有人。'
+    + '那是拖行，更确切地说，是搬运。严格来说不该出现在这里。某种程度上，它指向凶手。'
+    + '屋里冰冷，指尖冰凉，太阳穴一阵剧痛，胸口发闷而沉重。');
+  assertIssue(r, 'soft', '次高频词密度超限', '心理动词钉词', '意识到');
+  assertIssue(r, 'soft', '迂回缓冲关联词', '迂回关联词钉词', '更确切地说');
+  assertIssue(r, 'soft', '迂回缓冲关联词', '迂回关联词钉词', '严格来说');
+  assertIssue(r, 'soft', '迂回缓冲关联词', '迂回关联词钉词', '某种程度上');
+  assertIssue(r, 'soft', '高浓度氛围词', '氛围词钉词', '冰冷');
+  assertIssue(r, 'soft', '高浓度氛围词', '氛围词钉词', '冰凉');
+});
+
+check('迂回关联词对话豁免与低密度不误报', () => {
+  // 对话里的「严格来说」是人物口语，不罚；叙述层 2 次以内也不罚
+  const inDialogue = lintText('“严格来说，这不算证据。”他把照片收回口袋。');
+  assertNoIssue(inDialogue, '迂回缓冲关联词', '对话内关联词');
+  const sparse = lintText('严格来说，这不算证据。他把照片收回口袋，走出门。');
+  assertNoIssue(sparse, '迂回缓冲关联词', '叙述层单次');
 });
 
 check('“当……的时候”超 1 次报 soft', () => {
