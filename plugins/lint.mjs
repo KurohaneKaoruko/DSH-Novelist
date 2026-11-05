@@ -40,6 +40,8 @@ const BANNED = [
   '轰', '炸雷', '闷响',
   // skill 一级区补收（tools/check-lexicon-sync.mjs 校验出的漂移：眼神/声音框架、伪具体比喻、反应套话）
   '锐利的眼睛', '目光扫过', '目光里毫不遮掩', '声音不大', '缓缓地说', '的口吻', '还要冰冷', '刺入', '炸开', '波涛汹涌', '沉默在两人之间蔓延', '一只无形的手', '凝固',
+  // prose-standards 禁用表补收（2026-11 对照）：「纤长的手指」直接删——手写动作，不写长度
+  '纤长',
 ];
 
 // 万能量词（全砍）
@@ -243,6 +245,14 @@ export function lintText(body) {
   // 「一种难以X的Y」（零容忍）：万能量词+不可名状=什么都没写
   const nanYi = countNarrative(/一[种股抹]难以[^。！？\n]{0,10}(的感觉|的情绪|的滋味|的预感)/g);
   if (nanYi > 0) push('soft', `“一种难以……的感觉/情绪”出现 ${nanYi} 次`, '零容忍：不可名状=没写；写具体的身体反应或行为');
+  // 「有一种X的感觉/情绪」（零容忍，prose-standards 禁模糊词）：与上一条同族但无「难以」限定——
+  // 「有一种他要走了的感觉」照样什么都没写。只查叙述层（人物口头说感觉是自然语言）。
+  const youYiZhong = countNarrative(/有一种[^。！？\n]{0,12}?(的感觉|的情绪)/g);
+  if (youYiZhong > 0) push('soft', `“有一种……的感觉”出现 ${youYiZhong} 次`, '零容忍：模糊感觉=没写；写让他产生这感觉的具体事');
+  // 「在这个……的世界里」（零容忍，prose-standards 万能套话）：AI 世界观开场框。
+  // 「世界」不限定死——「在这个冰冷的都市里」同框架同病灶，一并抓。
+  const inWorld = countNarrative(/在这个[^。！？\n]{0,16}的(世界|世界线|都市|时代|世界里)/g);
+  if (inWorld > 0) push('soft', `“在这个……的世界里”出现 ${inWorld} 次`, '零容忍：世界观说明书腔；设定放进事件与对话，不搭空框架');
   // 万能举例框架（≤1 次）：正文不该有解释腔
   const liJu = EXAMPLE_CONN.reduce((s, w) => s + occurs(w), 0);
   if (liJu > 1) push('soft', `举例/解释框架（比如说/简而言之等）${liJu} 处`, '正文是叙事不是说明文；信息放进事件和对话里');
@@ -253,6 +263,15 @@ export function lintText(body) {
   for (const w of ['仿佛', '如同', '宛如', '恰似']) {
     const n = occurs(w);
     if (n > 3) simileHits.push(`“${w}”×${n}`);
+  }
+  // 连续两句「……，像……」（prose-standards 比喻纪律）：比喻连发是模板节奏
+  // 「好像」不算（更像“似乎”，且「，像」匹配不到它）——只抓逗号后直接接比喻引导的写法
+  const simileSentences = narrative.split(/[。！？\n]+/).map((s) => /，(就)?像(是)?/.test(s));
+  for (let i = 1; i < simileSentences.length; i += 1) {
+    if (simileSentences[i] && simileSentences[i - 1]) {
+      push('soft', '连续两句“……，像……”', '比喻连发是模板节奏；第二个比喻删掉或改成直写');
+      break;
+    }
   }
   if (simileHits.length) push('soft', '比喻引导词频次（同一引导词上限 3，一段最多一个比喻）', simileHits.join('、'));
 

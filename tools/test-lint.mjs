@@ -264,6 +264,21 @@ check('迂回关联词对话豁免与低密度不误报', () => {
   assertNoIssue(sparse, '迂回缓冲关联词', '叙述层单次');
 });
 
+check('prose-standards 补收：模糊感觉框/世界观开场框/纤长/连续比喻报出', () => {
+  const r = lintText('在这个冰冷的都市里，人人都戴着面具。他有一种她要走了的感觉。她收起纤长的手指，把杯子推远。月光落在窗台上，像水。他的手放在桌上，像等着什么。');
+  assertIssue(r, 'soft', '在这个……的世界里', '世界观开场框');
+  assertIssue(r, 'soft', '有一种……的感觉', '模糊感觉框');
+  assertIssue(r, 'soft', '禁用词', '纤长', '“纤长”');
+  assertIssue(r, 'soft', '连续两句', '连续比喻');
+});
+
+check('模糊感觉框对话豁免与单次比喻不误报', () => {
+  const inDialogue = lintText('“我有一种被骗的感觉。”她把手机扣在桌上。');
+  assertNoIssue(inDialogue, '有一种', '对话内感觉框');
+  const oneSimile = lintText('月光落在窗台上，像水。他关了灯。');
+  assertNoIssue(oneSimile, '连续两句', '单个比喻');
+});
+
 check('“当……的时候”超 1 次报 soft', () => {
   const r = lintText('当他推开门的时候，屋里一片漆黑。当他回头的时候，走廊已空无一人。');
   assertIssue(r, 'soft', '当……的时候', '当时候');
