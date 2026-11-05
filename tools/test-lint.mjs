@@ -236,6 +236,15 @@ check('仙侠空镜套话报 soft（天地变色家族，novel-style-xianxia 打
   }
 });
 
+check('悬疑氛围点名词报 soft（感到恐怖/诡异家族，novel-style-mystery 恐怖写法）', () => {
+  const r = lintText('他感到一阵恐怖。这道门的造型十分诡异，气氛诡谲可怖。');
+  const hit = assertIssue(r, 'soft', '禁用词', '氛围点名词', '恐怖');
+  for (const part of ['感到一阵恐怖', '十分诡异', '诡谲可怖']) {
+    assert(hit[2].includes(part), `应报出「${part}」，实际：${hit[2]}`);
+  }
+  assert(!hit[2].includes('“恐怖”×'), '裸词「恐怖/诡异」不在禁用表内');
+});
+
 check('声音万能框架与翻译腔弱动词报 soft', () => {
   const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
   assertIssue(r, 'soft', '禁用词', '回荡', '回荡着');
