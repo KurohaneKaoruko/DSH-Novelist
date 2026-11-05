@@ -228,6 +228,14 @@ check('心动套话报 soft（心里一颤家族，novel-style-romance 心动写
   }
 });
 
+check('仙侠空镜套话报 soft（天地变色家族，novel-style-xianxia 打斗写法）', () => {
+  const r = lintText('他一剑斩出，天地变色。万物失色，众生噤声，周围风云变色。');
+  const hit = assertIssue(r, 'soft', '禁用词', '空镜', '天地变色');
+  for (const part of ['天地变色', '风云变色', '万物失色', '众生噤声']) {
+    assert(hit[2].includes(part), `应报出「${part}」，实际：${hit[2]}`);
+  }
+});
+
 check('声音万能框架与翻译腔弱动词报 soft', () => {
   const r = lintText('笑声在走廊里回荡着。他们进行了一次深入的谈话。');
   assertIssue(r, 'soft', '禁用词', '回荡', '回荡着');
